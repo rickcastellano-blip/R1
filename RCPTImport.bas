@@ -42,20 +42,9 @@ Public Sub AddRCPTRunFromCSV()
         Exit Sub
     End If
 
-    ' --- short log: offer to add it anyway ----------------------------
+    ' --- short log: add it flagged as partial --------------------------
     If isPartial Then
         estQ = charge + i6A * (TEST_SECONDS - availHrs * 3600#)
-        Application.StatusBar = False
-        Application.ScreenUpdating = True
-        If MsgBox("The log only covers " & Format(availHrs, "0.00") & _
-                  " h after voltage was applied (6 h needed)." & vbCrLf & vbCrLf & _
-                  "Measured charge (" & Format(availHrs, "0.00") & " h):  " & _
-                  Format(charge, "#,##0") & " C" & vbCrLf & _
-                  "Est. 6 h charge (mean of last " & TAIL_POINTS & " pts held):  " & _
-                  Format(estQ, "#,##0") & " C" & vbCrLf & vbCrLf & _
-                  "Add a row flagged as partial?", _
-                  vbYesNo + vbQuestion, "Add RCPT Run") = vbNo Then Exit Sub
-        Application.ScreenUpdating = False
         cls = RCPTClass(estQ) & " - partial " & Format(availHrs, "0.00") & " h"
     Else
         estQ = charge
