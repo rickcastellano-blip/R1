@@ -45,7 +45,7 @@ Public Sub AddRCPTRunFromCSV()
     ' --- short log: add it flagged as partial --------------------------
     If isPartial Then
         estQ = charge + i6A * (TEST_SECONDS - availHrs * 3600#)
-        cls = RCPTClass(estQ) & " - partial " & Format(availHrs, "0.00") & " h"
+        cls = RCPTClass(estQ)
     Else
         estQ = charge
         cls = RCPTClass(charge)
