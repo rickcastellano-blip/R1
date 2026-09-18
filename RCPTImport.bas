@@ -1,4 +1,3 @@
-Attribute VB_Name = "RCPTImport"
 Option Explicit
 
 '=========================== CONFIG ===========================
