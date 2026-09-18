@@ -94,7 +94,7 @@ Public Sub AddRCPTRunFromCSV()
     End If
 
     If nPts > 0 Then
-        AddCurrentChart ws, r, sample, tArr, aArr
+        AddCurrentChart ws, r, sample, estQ, tArr, aArr
     End If
 
     Application.StatusBar = False
@@ -287,7 +287,7 @@ End Function
 
 '====================== Chart: first 6 h of current ==============
 Private Sub AddCurrentChart(ws As Worksheet, r As Long, sample As String, _
-                            tArr() As Double, aArr() As Double)
+                            rcptC As Double, tArr() As Double, aArr() As Double)
     Dim cht As ChartObject
     Dim anchorCell As Range
     Dim xArr() As Double, yArr() As Double
@@ -338,7 +338,7 @@ Private Sub AddCurrentChart(ws As Worksheet, r As Long, sample As String, _
         End With
 
         .HasTitle = True
-        .ChartTitle.Text = sample & " - (" & q & " C)"
+        .ChartTitle.Text = sample & " - (" & Format(rcptC, "#,##0") & " C)"
 
         With .Axes(xlCategory, xlPrimary)
             .HasTitle = True
