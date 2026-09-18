@@ -7,6 +7,7 @@ Private Const LAST_COL      As Long = 16         ' A:P - used to find an empty r
 Private Const TEST_SECONDS  As Double = 21600#   ' 6 hours
 Private Const V_THRESHOLD   As Double = 30#      ' voltage-on detection
 Private Const H_OFFSET_SEC  As Double = 30#      ' initial-current sample point
+Private Const TAIL_POINTS   As Long = 10         ' samples averaged to extrapolate a short log
 Private Const WRITE_FORMULAS       As Boolean = True
 Private Const WRITE_AREA_RATIO     As Boolean = True
 Private Const DEFAULT_AREA_RATIO   As Double = 1#
@@ -51,7 +52,7 @@ Public Sub AddRCPTRunFromCSV()
                   " h after voltage was applied (6 h needed)." & vbCrLf & vbCrLf & _
                   "Measured charge (" & Format(availHrs, "0.00") & " h):  " & _
                   Format(charge, "#,##0") & " C" & vbCrLf & _
-                  "Est. 6 h charge (last current held):  " & _
+                  "Est. 6 h charge (mean of last " & TAIL_POINTS & " pts held):  " & _
                   Format(estQ, "#,##0") & " C" & vbCrLf & vbCrLf & _
                   "Add a row flagged as partial?", _
                   vbYesNo + vbQuestion, "Add RCPT Run") = vbNo Then Exit Sub
@@ -98,9 +99,9 @@ Public Sub AddRCPTRunFromCSV()
         ws.Range(ws.Cells(r, 1), ws.Cells(r, LAST_COL)).Interior.Color = PARTIAL_FILL
         ws.Cells(r, 12).ClearComments
         ws.Cells(r, 12).AddComment "Partial log: measured over " & Format(availHrs, "0.00") & _
-            " h only." & vbLf & "Est. 6 h charge (last current held constant): " & _
-            Format(estQ, "#,##0") & " C" & vbLf & _
-            "Increase factor (col I) uses current at " & Format(availHrs, "0.00") & " h."
+            " h only." & vbLf & "Est. 6 h charge (mean of last " & TAIL_POINTS & _
+            " samples held constant): " & Format(estQ, "#,##0") & " C" & vbLf & _
+            "Increase factor (col I) uses the mean of the last " & TAIL_POINTS & " samples."
     End If
 
     If nPts > 0 Then
@@ -252,7 +253,7 @@ NextLine:
         ' Short log: return what we have and let the caller decide
         isPartial = True
         availHrs = prevS / 3600#
-        i6A = prevA                     ' last current in the log
+        i6A = TailMean(aArr, nPts, TAIL_POINTS)
         ParseRCPT = ""
     Else
         ParseRCPT = ""
@@ -277,6 +278,16 @@ Private Sub AddPoint(ByRef tArr() As Double, ByRef aArr() As Double, _
     tArr(nPts) = tVal
     aArr(nPts) = aVal
 End Sub
+
+Private Function TailMean(aArr() As Double, nPts As Long, nTail As Long) As Double
+    Dim i As Long, k As Long, s As Double
+    k = nTail
+    If k > nPts Then k = nPts
+    For i = nPts - k + 1 To nPts
+        s = s + aArr(i)
+    Next i
+    TailMean = s / k
+End Function
 
 Private Function StampToSeconds(t As String) As Double
     StampToSeconds = CDbl(DateSerial(CLng(Mid$(t, 1, 4)), CLng(Mid$(t, 6, 2)), CLng(Mid$(t, 9, 2)))) * 86400# _
