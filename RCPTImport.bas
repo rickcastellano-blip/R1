@@ -71,7 +71,7 @@ Public Sub AddRCPTRunFromCSV()
     ws.Cells(r, 2).Value = sample
     ws.Cells(r, 8).Value = Round(hA * 1000#, 0)
     ws.Cells(r, 9).Value = i6A / hA
-    ws.Cells(r, 12).Value = Round(charge, 0)
+    ws.Cells(r, 12).Value = Round(estQ, 0)
     ws.Cells(r, 14).Value = cls
     ws.Cells(r, 16).Value = onHours
 
@@ -98,9 +98,10 @@ Public Sub AddRCPTRunFromCSV()
         ws.Range(ws.Cells(r, 1), ws.Cells(r, LAST_COL)).Interior.Color = PARTIAL_FILL
         ws.Cells(r, 12).ClearComments
         ws.Cells(r, 12).AddComment "Partial log: measured over " & Format(availHrs, "0.00") & _
-            " h only." & vbLf & "Est. 6 h charge (mean of last " & TAIL_POINTS & _
-            " samples held constant): " & Format(estQ, "#,##0") & " C" & vbLf & _
-            "Increase factor (col I) uses the mean of the last " & TAIL_POINTS & " samples."
+            " h only." & vbLf & "Measured charge: " & Format(charge, "#,##0") & " C" & vbLf & _
+            "Value shown is extrapolated to 6 h, holding the mean of the last " & _
+            TAIL_POINTS & " samples constant." & vbLf & _
+            "Increase factor (col I) uses that same mean."
     End If
 
     If nPts > 0 Then
