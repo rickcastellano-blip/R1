@@ -338,7 +338,7 @@ Private Sub AddCurrentChart(ws As Worksheet, r As Long, sample As String, _
         End With
 
         .HasTitle = True
-        .ChartTitle.Text = sample & " - current, first 6 h"
+        .ChartTitle.Text = sample & " - (" & q & " C)"
 
         With .Axes(xlCategory, xlPrimary)
             .HasTitle = True
