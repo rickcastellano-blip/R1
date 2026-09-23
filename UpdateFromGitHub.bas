@@ -17,7 +17,7 @@ Private Const MODULE_MAP As String = _
 Public Sub UpdateFromGitHub()
     Dim pairs As Variant, kv As Variant, i As Long
     Dim modName As String, fileName As String, code As String, msg As String
-    Dim vbp As Object, report As String, nOK As Long
+    Dim vbp As Object, report As String, nOK As Long, nAll As Long
 
     On Error Resume Next
     Set vbp = ThisWorkbook.VBProject
@@ -35,6 +35,7 @@ Public Sub UpdateFromGitHub()
     pairs = Split(MODULE_MAP, ";")
     For i = LBound(pairs) To UBound(pairs)
         If Len(Trim$(pairs(i))) > 0 Then
+            nAll = nAll + 1
             kv = Split(pairs(i), "=")
             modName = Trim$(kv(0)): fileName = Trim$(kv(1))
             Application.StatusBar = "Downloading " & fileName & " ..."
@@ -51,10 +52,11 @@ Public Sub UpdateFromGitHub()
     Next i
     Application.StatusBar = False
 
-    MsgBox "Branch: " & GH_BRANCH & vbCrLf & vbCrLf & report & vbCrLf & _
-           nOK & " module(s) updated. Save the workbook to keep the changes.", _
-           IIf(nOK = UBound(pairs) - LBound(pairs) + 1, vbInformation, vbExclamation), _
-           "Update from GitHub"
+    ' silent on success; only report when a module failed
+    If nOK < nAll Then
+        MsgBox "Branch: " & GH_BRANCH & vbCrLf & vbCrLf & report & vbCrLf & _
+               nOK & " of " & nAll & " module(s) updated.", vbExclamation, "Update from GitHub"
+    End If
 End Sub
 
 ' GitHub contents API with the raw media type: returns the file text and,
