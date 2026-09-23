@@ -17,6 +17,8 @@ Private Const LG_RIGHT      As Double = 0.938    ' 'northeast'
 Private Const LG_TOP        As Double = 0.086
 Private Const LG_LINESP     As Double = 1.45
 Private Const TICK_OFFSET   As Long = 20
+Private Const DO_LABELS     As Boolean = True    ' xgrapher: dolabels
+Private Const MAT_FS_TEXT   As Double = 15       ' xgrapher: fs (point-label FontSize)
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range, f As Range
@@ -39,6 +41,7 @@ Sub GenerateLineGraph()
     Dim fsT As Double, fsA As Double, fsL As Double
     Dim wAX As Double, wPL As Double, msz As Double
     Dim axMax As Double, axStep As Double, axMin As Double
+    Dim lblC() As Long, fsTx As Double
 
     '--- 1. pick the range (you can switch workbooks in this dialog) --------
     On Error Resume Next
@@ -89,6 +92,7 @@ Sub GenerateLineGraph()
     ReDim blkRow(1 To lastR - tagR + 2)
     ReDim blkLab(1 To lastR - tagR + 2)
     ReDim rc(1 To lastR - tagR + 2)
+    ReDim lblC(1 To lastR - tagR + 2)
     inBlk = False
     For r = tagR + 2 To lastR
         b = tws.Cells(r, xC).Value
@@ -119,6 +123,15 @@ Sub GenerateLineGraph()
     If nBlk = 0 Then MsgBox "No numeric X/Y pairs found below the tag.", vbExclamation: Exit Sub
     For j = 1 To nBlk
         If rc(j) > nPts Then nPts = rc(j)
+        ' text labels sit in the first non-numeric column after X,Y (xgrapher:
+        ' j+2 if no error columns, j+3 after +/-Y, j+4 after +/-Y and +/-X)
+        If ColHasText(tws, blkRow(j), rc(j), e1C) Then
+            lblC(j) = e1C
+        ElseIf ColHasText(tws, blkRow(j), rc(j), e2C) Then
+            lblC(j) = e2C
+        ElseIf Application.CountA(tws.Cells(blkRow(j), e2C + 1).Resize(rc(j), 1)) > 0 Then
+            lblC(j) = e2C + 1
+        End If
     Next j
 
     '--- 4. size + scaled type / line weights ------------------------------
@@ -127,6 +140,7 @@ Sub GenerateLineGraph()
     fsT = Application.Max(1, Round(MAT_FS_TICKS * sc, 1))
     fsA = Application.Max(1, Round(MAT_FS_LABEL * sc, 1))
     fsL = fsT
+    fsTx = Application.Max(1, Round(MAT_FS_TEXT * sc, 1))
     wAX = Application.Max(0.25, Round(MAT_LINEW * sc, 2))
     wPL = Application.Max(0.25, Round(MAT_PLOTW * sc, 2))
     msz = Application.Min(72, Application.Max(2, Round(MAT_MS * sc * 0.5, 0)))
@@ -178,7 +192,7 @@ Sub GenerateLineGraph()
             .Format.Line.ForeColor.RGB = cols((j - 1) Mod 13)
             .Format.Line.Weight = wPL
             ' col 3 = +/- Y error, col 4 = +/- X error (xgrapher errorbar signature)
-            If hasE1 Then
+            If hasE1 And lblC(j) <> e1C Then
                 .ErrorBar Direction:=xlY, Include:=xlBoth, _
                           Type:=xlErrorBarTypeCustom, Amount:=e1Rng, MinusValues:=e1Rng
                 With .ErrorBars
@@ -187,7 +201,7 @@ Sub GenerateLineGraph()
                     .Format.Line.Weight = wAX
                 End With
             End If
-            If hasE2 Then
+            If hasE2 And lblC(j) <> e1C And lblC(j) <> e2C Then
                 .ErrorBar Direction:=xlX, Include:=xlBoth, _
                           Type:=xlErrorBarTypeCustom, Amount:=e2Rng, MinusValues:=e2Rng
             End If
@@ -203,6 +217,16 @@ Sub GenerateLineGraph()
     With ch.ChartArea.Font
         .Name = FONT_NAME: .Size = fsT: .Color = RGB(0, 0, 0): .Bold = False
     End With
+
+    '--- 7b. point text labels (after the ChartArea font, which would resize them)
+    If DO_LABELS Then
+        For j = 1 To nBlk
+            If lblC(j) > 0 Then
+                AddPointLabels ch.SeriesCollection(j), _
+                               tws.Cells(blkRow(j), lblC(j)).Resize(rc(j), 1), fsTx
+            End If
+        Next j
+    End If
 
     '--- 8. axes ----------------------------------------------------------
     With ch.Axes(xlValue)
@@ -338,4 +362,60 @@ Sub GenerateLineGraph()
 
     MsgBox "Chart created in '" & tws.Parent.Name & "' on '" & tws.Name & "'." & vbCrLf & _
            nBlk & " series, " & nPts & " points max.", vbInformation
+End Sub
+
+' True if any cell in column c, rows r0..r0+n-1, holds non-blank text.
+Private Function ColHasText(ws As Worksheet, r0 As Long, n As Long, c As Long) As Boolean
+    Dim i As Long, v As Variant
+    For i = 0 To n - 1
+        v = ws.Cells(r0 + i, c).Value
+        If VarType(v) = vbString Then
+            If Len(Trim$(v)) > 0 Then ColHasText = True: Exit Function
+        End If
+    Next i
+End Function
+
+' Data labels to the right of each point, text taken from lblRng (xgrapher:
+' text(x, y, label, 'HorizontalAlignment', 'left', 'VerticalAlignment', 'middle')).
+Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double)
+    Dim i As Long, v As Variant, linked As Boolean
+
+    ser.HasDataLabels = True
+    ' Excel 2013+: "Value From Cells", so labels follow later edits to the sheet
+    On Error Resume Next
+    ser.DataLabels.Format.TextFrame2.TextRange.InsertChartField msoChartFieldRange, _
+        "='" & Replace(lblRng.Worksheet.Name, "'", "''") & "'!" & lblRng.Address, 0
+    linked = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+
+    With ser.DataLabels
+        If linked Then
+            .ShowRange = True
+            .ShowValue = False
+        End If
+        .ShowSeriesName = False
+        .ShowCategoryName = False
+        .ShowLegendKey = False
+        .Position = xlLabelPositionRight
+        .Font.Name = FONT_NAME
+        .Font.Size = fs
+        .Font.Bold = False
+        .Font.Color = RGB(0, 0, 0)
+    End With
+
+    ' error cells get no label (xgrapher skips "ActiveX VT_ERROR:"); on older
+    ' Excel, copy each cell's text in as a static label instead
+    For i = 1 To Application.Min(lblRng.Rows.Count, ser.Points.Count)
+        v = lblRng.Cells(i, 1).Value
+        If IsError(v) Then
+            ser.Points(i).HasDataLabel = False
+        ElseIf Not linked Then
+            If Len(Trim$(CStr(v))) = 0 Then
+                ser.Points(i).HasDataLabel = False
+            Else
+                ser.Points(i).DataLabel.Text = CStr(v)
+            End If
+        End If
+    Next i
 End Sub
