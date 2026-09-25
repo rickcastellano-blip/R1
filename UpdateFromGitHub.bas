@@ -7,14 +7,23 @@ Private Const GH_BRANCH  As String = "claude/tender-ramanujan-047vzz"
 Private Const MODULE_MAP As String = _
     "Module4=GenerateLineGraph.bas;" & _
     "Module3=GenerateStrengthBarGraph.bas"
+Private Const NT492_MAP  As String = "NTBuild492=NTBuild492.bas"
 '==============================================================
 
-' Button macro: pull the latest code for every module in MODULE_MAP from
-' GitHub and replace that module's code in this workbook. This module is
-' never overwritten, so keep it separate from the ones it updates.
-' Needs File > Options > Trust Center > Macro Settings >
+' Button macros: pull the latest code for every module in a map from GitHub
+' and replace that module's code in this workbook (a missing module is
+' created). This module is never overwritten, so keep it separate from the
+' ones it updates. Needs File > Options > Trust Center > Macro Settings >
 ' "Trust access to the VBA project object model".
 Public Sub UpdateFromGitHub()
+    UpdateModules MODULE_MAP
+End Sub
+
+Public Sub UpdateNTBuild492()
+    UpdateModules NT492_MAP
+End Sub
+
+Private Sub UpdateModules(moduleMap As String)
     Dim pairs As Variant, kv As Variant, i As Long
     Dim modName As String, fileName As String, code As String, msg As String
     Dim vbp As Object, report As String, nOK As Long, nAll As Long
@@ -32,7 +41,7 @@ Public Sub UpdateFromGitHub()
     End If
     On Error GoTo 0
 
-    pairs = Split(MODULE_MAP, ";")
+    pairs = Split(moduleMap, ";")
     For i = LBound(pairs) To UBound(pairs)
         If Len(Trim$(pairs(i))) > 0 Then
             nAll = nAll + 1
