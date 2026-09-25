@@ -1,33 +1,30 @@
 Option Explicit
 
-' NT BUILD 492 - non-steady-state chloride migration coefficient (Dnssm)
-' from a TTi CPX400DP logger CSV, one row per specimen.
-' The scan gives U, t and the currents; thickness, temperatures and the
-' seven penetration depths are typed into the row, and Dnssm (eq. 1-3,
-' with the inverse error function) is a live formula.
+' NT BUILD 492 - read a TTi CPX400DP logger CSV and write one row per
+' specimen. Columns A:M match the "Data Summary" sheet of the NT492
+' Measurement workbook, so a row copies straight across; that workbook
+' works out depths, Dnssm and the categories.
 
 '=========================== CONFIG ===========================
 Private Const SHEET_NAME    As String = "NT492"
-Private Const LAST_COL      As Long = 20         ' A:T
+Private Const LAST_COL      As Long = 13         ' A:M, same as Data Summary
+Private Const OLD_LAST_COL  As Long = 20         ' earlier layout went to T; cleared on re-import
+Private Const NACL_FRAC     As Double = 0.1      ' 10 % NaCl catholyte
 Private Const V_ON          As Double = 5#       ' readings at/above this are "voltage on"
 Private Const U_TOL         As Double = 1#       ' V; a reading within this of a level is "at" it
 Private Const SETTLE_SEC    As Double = 5#       ' initial currents are read this long after switch-on
 Private Const T_TOL_HRS     As Double = 0.5      ' duration tolerance for the Table 1 check
-Private Const R_GAS         As Double = 8.314    ' J/(K mol)
-Private Const F_FARADAY     As Double = 96480#   ' J/(V mol), NT BUILD 492 value
-Private Const Z_CL          As Double = 1#
 Private Const CD_N          As Double = 0.07     ' N, colour-change concentration (OPC)
-Private Const C0_N          As Double = 2#       ' N, catholyte concentration
 Private Const CHART_WIDTH_PT   As Double = 320#
 Private Const CHART_HEIGHT_PT  As Double = 170#
 Private Const CHART_MAX_POINTS As Long = 1200
 Private Const FLAG_FILL        As Long = 13431551  ' RGB(255,242,204) light yellow
 
-' columns
-Private Const C_DATE As Long = 1, C_SPEC As Long = 2, C_I30 As Long = 3, C_U As Long = 4
-Private Const C_I0 As Long = 5, C_IFIN As Long = 6, C_T As Long = 7, C_CHK As Long = 8
-Private Const C_L As Long = 9, C_TI As Long = 10, C_TF As Long = 11
-Private Const C_X1 As Long = 12, C_X7 As Long = 18, C_XAVG As Long = 19, C_DN As Long = 20
+' columns (Data Summary order)
+Private Const C_DATE As Long = 1, C_SPEC As Long = 2, C_U As Long = 3, C_NACL As Long = 4
+Private Const C_CCL As Long = 5, C_ERF As Long = 6, C_TEMP As Long = 7, C_L As Long = 8
+Private Const C_T As Long = 9, C_I30 As Long = 10, C_I0 As Long = 11, C_IFIN As Long = 12
+Private Const C_CHK As Long = 13
 
 '==================== BUTTON: Analyze NT Build 492 ==============
 Public Sub AnalyzeNTBuild492()
@@ -70,8 +67,10 @@ Public Sub AnalyzeNTBuild492()
     Set ws = GetSheet()
     r = FindRow(ws, spec, dTest)
 
+    ws.Range(ws.Cells(r, LAST_COL + 1), ws.Cells(r, OLD_LAST_COL)).ClearContents
     ws.Cells(r, C_DATE).Value = dTest
     ws.Cells(r, C_SPEC).Value = spec
+    ws.Cells(r, C_NACL).Value = NACL_FRAC
     If has30 Then ws.Cells(r, C_I30).Value = Round(i30 * 1000#, 0) Else ws.Cells(r, C_I30).ClearContents
     ws.Cells(r, C_U).Value = Round(U, 1)
     ws.Cells(r, C_I0).Value = Round(i0 * 1000#, 0)
@@ -86,7 +85,7 @@ Public Sub AnalyzeNTBuild492()
     Application.StatusBar = False
     Application.ScreenUpdating = True
     ws.Activate
-    ws.Cells(r, C_L).Select         ' next: type L, temperatures and depths
+    ws.Cells(r, C_TEMP).Select      ' next: type temperature and thickness
     Exit Sub
 
 Cleanup:
@@ -247,30 +246,34 @@ Private Function GetSheet() As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SHEET_NAME)
     On Error GoTo 0
-    If Not ws Is Nothing Then Set GetSheet = ws: Exit Function
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SHEET_NAME
+    End If
 
-    Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-    ws.Name = SHEET_NAME
-    hdr = Array("Test date", "Specimen", "I30V (mA)", "U (V)", "I0 (mA)", "I final (mA)", _
-                "t (h)", "Table 1 check", "L (mm)", "T initial (" & ChrW(176) & "C)", _
-                "T final (" & ChrW(176) & "C)", "xd1 (mm)", "xd2 (mm)", "xd3 (mm)", "xd4 (mm)", _
-                "xd5 (mm)", "xd6 (mm)", "xd7 (mm)", "xd avg (mm)", _
-                "Dnssm (" & ChrW(215) & "10^-12 m" & ChrW(178) & "/s)")
+    ' header row always rewritten, so an older layout is brought in line
+    hdr = Array("Date", "Sample", "Voltage (V)", "NaCl Conc", "c_Cl" & ChrW(8315) & " (M)", _
+                "erf" & ChrW(8315) & ChrW(185) & "(1 - 2cd/c0)", "Temp. (" & ChrW(176) & "C)", _
+                "Thickness (mm)", "Duration t (h)", "I30V (mA)", "I0 (mA)", "I final (mA)", _
+                "Table 1 check")
+    ws.Range(ws.Cells(1, LAST_COL + 1), ws.Cells(1, OLD_LAST_COL)).ClearContents
+    ws.Range(ws.Cells(1, LAST_COL + 1), ws.Cells(1, OLD_LAST_COL)).Interior.ColorIndex = xlColorIndexNone
     For i = 0 To UBound(hdr)
         ws.Cells(1, i + 1).Value = hdr(i)
     Next i
     With ws.Range(ws.Cells(1, 1), ws.Cells(1, LAST_COL))
         .Font.Bold = True
+        .Font.Italic = True
         .WrapText = True
         .HorizontalAlignment = xlCenter
-        .VerticalAlignment = xlCenter
+        .VerticalAlignment = xlBottom
+        .Interior.ColorIndex = xlColorIndexNone
     End With
-    ' shade the columns the user fills in
-    ws.Range(ws.Cells(1, C_L), ws.Cells(1, C_X7)).Interior.Color = RGB(221, 235, 247)
+    ' shade the columns typed in by hand
+    ws.Range(ws.Cells(1, C_TEMP), ws.Cells(1, C_L)).Interior.Color = RGB(221, 235, 247)
     ws.Columns(C_SPEC).ColumnWidth = 12
-    ws.Columns(C_CHK).ColumnWidth = 18
-    ws.Columns(C_DN).ColumnWidth = 14
-    ws.Rows(1).RowHeight = 45
+    ws.Columns(C_CHK).ColumnWidth = 14
+    ws.Rows(1).RowHeight = 30
     Set GetSheet = ws
 End Function
 
@@ -289,23 +292,13 @@ Private Function FindRow(ws As Worksheet, spec As String, dTest As Date) As Long
     FindRow = r
 End Function
 
-' Eq. (1)-(3), SI units inside the formula:
-'   k = RT/(zFE),  E = (U-2)/L,  T = 273.15 + mean(Ti, Tf)
-'   Dnssm = k * (xd - 2*sqrt(k)*erfinv(1 - 2cd/c0)*sqrt(xd)) / t
-' Excel has no inverse erf; erfinv(y) = NORM.S.INV((1+y)/2)/sqrt(2).
+' c_Cl- (N) from the NaCl fraction (10 % -> 2.00, 3 % -> 0.60) and
+' erf^-1(1 - 2cd/c0); Excel has no inverse erf, so
+' erfinv(y) = NORM.S.INV((1+y)/2)/sqrt(2). Relative references, so they
+' still work after the row is pasted into Data Summary.
 Private Sub WriteFormulas(ws As Worksheet, r As Long)
-    Dim xr As String, k As String, erfi As String, xd As String
-
-    xr = ws.Range(ws.Cells(r, C_X1), ws.Cells(r, C_X7)).Address(False, False)
-    ws.Cells(r, C_XAVG).Formula = "=IF(COUNT(" & xr & ")=0,""""," & "AVERAGE(" & xr & "))"
-
-    k = "(" & Num(R_GAS) & "*(273.15+AVERAGE(" & Adr(ws, r, C_TI) & ":" & Adr(ws, r, C_TF) & "))/(" & Num(Z_CL) & "*" & Num(F_FARADAY) & _
-        "*(" & Adr(ws, r, C_U) & "-2)/(" & Adr(ws, r, C_L) & "/1000)))"
-    erfi = "(NORM.S.INV((2-2*" & Num(CD_N) & "/" & Num(C0_N) & ")/2)/SQRT(2))"
-    xd = "(" & Adr(ws, r, C_XAVG) & "/1000)"
-    ws.Cells(r, C_DN).Formula = "=IF(OR(" & Adr(ws, r, C_XAVG) & "=""""," & Adr(ws, r, C_L) & "=""""," & _
-        "COUNT(" & Adr(ws, r, C_TI) & ":" & Adr(ws, r, C_TF) & ")=0),""""," & _
-        k & "*(" & xd & "-2*SQRT(" & k & ")*" & erfi & "*SQRT(" & xd & "))/(" & Adr(ws, r, C_T) & "*3600)*1E12)"
+    ws.Cells(r, C_CCL).Formula = "=" & Adr(ws, r, C_NACL) & "*20"
+    ws.Cells(r, C_ERF).Formula = "=NORM.S.INV((2-2*" & Num(CD_N) & "/" & Adr(ws, r, C_CCL) & ")/2)/SQRT(2)"
 End Sub
 
 Private Function Adr(ws As Worksheet, r As Long, c As Long) As String
@@ -318,13 +311,18 @@ Private Function Num(x As Double) As String
 End Function
 
 Private Sub FormatRow(ws As Worksheet, r As Long, flagged As Boolean)
+    ws.Range(ws.Cells(r, LAST_COL + 1), ws.Cells(r, OLD_LAST_COL)).Interior.ColorIndex = xlColorIndexNone
     ws.Cells(r, C_DATE).NumberFormat = "m/d/yyyy"
+    ws.Cells(r, C_U).NumberFormat = "0"
+    ws.Cells(r, C_NACL).NumberFormat = "0%"
+    ws.Cells(r, C_CCL).NumberFormat = "0.00"
+    ws.Cells(r, C_ERF).NumberFormat = "0.000"
+    ws.Cells(r, C_TEMP).NumberFormat = "0.0"
+    ws.Cells(r, C_L).NumberFormat = "0"
+    ws.Cells(r, C_T).NumberFormat = "General"
     ws.Range(ws.Cells(r, C_I30), ws.Cells(r, C_IFIN)).NumberFormat = "0"
-    ws.Cells(r, C_U).NumberFormat = "0.0"
-    ws.Cells(r, C_T).NumberFormat = "0.00"
-    ws.Range(ws.Cells(r, C_L), ws.Cells(r, C_XAVG)).NumberFormat = "0.0"
-    ws.Cells(r, C_DN).NumberFormat = "0.00"
-    ws.Range(ws.Cells(r, C_I30), ws.Cells(r, C_DN)).HorizontalAlignment = xlCenter
+    ws.Range(ws.Cells(r, C_U), ws.Cells(r, C_CHK)).HorizontalAlignment = xlCenter
+    ws.Range(ws.Cells(r, C_TEMP), ws.Cells(r, C_L)).Interior.Color = RGB(221, 235, 247)
     If flagged Then
         ws.Cells(r, C_CHK).Interior.Color = FLAG_FILL
     Else
@@ -363,7 +361,7 @@ Private Sub AddCurrentChart(ws As Worksheet, r As Long, spec As String, U As Dou
     ws.ChartObjects("NT492_" & r).Delete
     On Error GoTo 0
 
-    Set anchorCell = ws.Cells(r, LAST_COL + 1)
+    Set anchorCell = ws.Cells(r, LAST_COL + 2)   ' one spare column after M
     Set cht = ws.ChartObjects.Add(anchorCell.Left, anchorCell.Top, CHART_WIDTH_PT, CHART_HEIGHT_PT)
     cht.Name = "NT492_" & r
     cht.Placement = xlMove
