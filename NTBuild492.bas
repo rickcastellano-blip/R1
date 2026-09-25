@@ -8,7 +8,6 @@ Option Explicit
 '=========================== CONFIG ===========================
 Private Const SHEET_NAME    As String = "NT492"
 Private Const LAST_COL      As Long = 13         ' A:M, same as Data Summary
-Private Const OLD_LAST_COL  As Long = 20         ' earlier layout went to T; cleared on re-import
 Private Const NACL_FRAC     As Double = 0.1      ' 10 % NaCl catholyte
 Private Const V_ON          As Double = 5#       ' readings at/above this are "voltage on"
 Private Const U_TOL         As Double = 1#       ' V; a reading within this of a level is "at" it
@@ -65,9 +64,8 @@ Public Sub AnalyzeNTBuild492()
     End If
 
     Set ws = GetSheet()
-    r = FindRow(ws, spec, dTest)
+    r = FirstEmptyRow(ws)
 
-    ws.Range(ws.Cells(r, LAST_COL + 1), ws.Cells(r, OLD_LAST_COL)).ClearContents
     ws.Cells(r, C_DATE).Value = dTest
     ws.Cells(r, C_SPEC).Value = spec
     ws.Cells(r, C_NACL).Value = NACL_FRAC
@@ -242,7 +240,7 @@ End Sub
 
 '====================== sheet ================================
 Private Function GetSheet() As Worksheet
-    Dim ws As Worksheet, hdr As Variant, i As Long
+    Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SHEET_NAME)
     On Error GoTo 0
@@ -250,46 +248,17 @@ Private Function GetSheet() As Worksheet
         Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
         ws.Name = SHEET_NAME
     End If
-
-    ' header row always rewritten, so an older layout is brought in line
-    hdr = Array("Date", "Sample", "Voltage (V)", "NaCl Conc", "c_Cl" & ChrW(8315) & " (M)", _
-                "erf" & ChrW(8315) & ChrW(185) & "(1 - 2cd/c0)", "Temp. (" & ChrW(176) & "C)", _
-                "Thickness (mm)", "Duration t (h)", "I30V (mA)", "I0 (mA)", "I final (mA)", _
-                "Table 1 check")
-    ws.Range(ws.Cells(1, LAST_COL + 1), ws.Cells(1, OLD_LAST_COL)).ClearContents
-    ws.Range(ws.Cells(1, LAST_COL + 1), ws.Cells(1, OLD_LAST_COL)).Interior.ColorIndex = xlColorIndexNone
-    For i = 0 To UBound(hdr)
-        ws.Cells(1, i + 1).Value = hdr(i)
-    Next i
-    With ws.Range(ws.Cells(1, 1), ws.Cells(1, LAST_COL))
-        .Font.Bold = True
-        .Font.Italic = True
-        .WrapText = True
-        .HorizontalAlignment = xlCenter
-        .VerticalAlignment = xlBottom
-        .Interior.ColorIndex = xlColorIndexNone
-    End With
-    ' shade the columns typed in by hand
-    ws.Range(ws.Cells(1, C_TEMP), ws.Cells(1, C_L)).Interior.Color = RGB(221, 235, 247)
-    ws.Columns(C_SPEC).ColumnWidth = 12
-    ws.Columns(C_CHK).ColumnWidth = 14
-    ws.Rows(1).RowHeight = 30
     Set GetSheet = ws
 End Function
 
-' Re-importing the same specimen and date reuses its row, keeping typed inputs.
-Private Function FindRow(ws As Worksheet, spec As String, dTest As Date) As Long
+' Every import goes on the first empty row below the header row.
+Private Function FirstEmptyRow(ws As Worksheet) As Long
     Dim r As Long
     r = 2
     Do While Application.WorksheetFunction.CountA(ws.Range(ws.Cells(r, 1), ws.Cells(r, LAST_COL))) > 0
-        If StrComp(CStr(ws.Cells(r, C_SPEC).Value), spec, vbTextCompare) = 0 Then
-            If IsDate(ws.Cells(r, C_DATE).Value) Then
-                If CLng(CDate(ws.Cells(r, C_DATE).Value)) = CLng(dTest) Then FindRow = r: Exit Function
-            End If
-        End If
         r = r + 1
     Loop
-    FindRow = r
+    FirstEmptyRow = r
 End Function
 
 ' c_Cl- (N) from the NaCl fraction (10 % -> 2.00, 3 % -> 0.60) and
@@ -311,7 +280,6 @@ Private Function Num(x As Double) As String
 End Function
 
 Private Sub FormatRow(ws As Worksheet, r As Long, flagged As Boolean)
-    ws.Range(ws.Cells(r, LAST_COL + 1), ws.Cells(r, OLD_LAST_COL)).Interior.ColorIndex = xlColorIndexNone
     ws.Cells(r, C_DATE).NumberFormat = "m/d/yyyy"
     ws.Cells(r, C_U).NumberFormat = "0"
     ws.Cells(r, C_NACL).NumberFormat = "0%"
