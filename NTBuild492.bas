@@ -21,7 +21,6 @@ Private Const CHART_MAX_POINTS As Long = 1200
 Private Const RCPT_SEC      As Double = 21600#   ' C1202: 6 h at 60 V ...
 Private Const RCPT_V        As Double = 60#      ' ... so integrate I over 6 h * 60/U at U
 Private Const RCPT_AREA     As Double = 0.9073   ' C1202 diameter correction (95.25/100 mm)^2
-Private Const TAIL_POINTS   As Long = 10         ' readings averaged to extend a short run
 Private Const SPEC_DIAM_MM  As Double = 100#     ' NT BUILD 492 specimen diameter
 Private Const FLAG_FILL        As Long = 13431551  ' RGB(255,242,204) light yellow
 
@@ -90,8 +89,8 @@ Public Sub AnalyzeNTBuild492()
         ws.Cells(r, C_QEQ).Interior.Color = FLAG_FILL
         ws.Cells(r, C_QEQ).AddComment "Run is shorter than the " & Format(qHrs, "0.0") & _
             " h needed at " & Format(U, "0") & " V." & vbLf & _
-            "Extended to " & Format(qHrs, "0.0") & " h holding the mean of the last " & _
-            TAIL_POINTS & " readings constant."
+            "Charge over the recorded " & Format(hrs, "0.00") & " h, scaled by " & _
+            Format(qHrs, "0.0") & " / " & Format(hrs, "0.00") & "."
     End If
 
     AddCurrentChart ws, r, spec, U, tS, aA, iStart, iEnd
@@ -256,13 +255,14 @@ End Sub
 
 ' RCPT-equivalent charge: at U the same charge takes 60/U times longer to
 ' pass than at 60 V, so integrate the current over 6 h * 60/U from the run
-' start (12 h at 30 V), then apply the C1202 diameter correction. A run
-' shorter than that is extended with the mean of its last readings.
+' start (12 h at 30 V), then apply the C1202 diameter correction. For a run
+' shorter than that, the whole recorded integral is scaled by
+' T_desired / T_attained.
 Private Function RCPTEquivalent(tS() As Double, aA() As Double, iStart As Long, _
                                 iEnd As Long, U As Double, ByRef qHrs As Double, _
                                 ByRef isShort As Boolean) As Double
     Dim tEnd As Double, q As Double, i As Long, s0 As Double, s1 As Double
-    Dim aEnd As Double, k As Long, tail As Double
+    Dim aEnd As Double, tRec As Double
 
     tEnd = RCPT_SEC * RCPT_V / U
     qHrs = tEnd / 3600#
@@ -280,12 +280,10 @@ Private Function RCPTEquivalent(tS() As Double, aA() As Double, iStart As Long, 
         q = q + (aA(i - 1) + aA(i)) / 2# * (s1 - s0)
     Next i
 
+    ' run ended early: scale the recorded integral by T_desired / T_attained
     isShort = True
-    For i = iEnd To iStart Step -1
-        tail = tail + aA(i): k = k + 1
-        If k = TAIL_POINTS Then Exit For
-    Next i
-    q = q + tail / k * (tEnd - (tS(iEnd) - tS(iStart)))
+    tRec = tS(iEnd) - tS(iStart)
+    If tRec > 0 Then q = q * tEnd / tRec
     RCPTEquivalent = q * RCPT_AREA
 End Function
 
