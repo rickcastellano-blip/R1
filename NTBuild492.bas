@@ -147,7 +147,8 @@ End Function
 '====================== run detection =========================
 ' Main run = longest continuous stretch with V >= V_ON. U = mean voltage of
 ' its second half. The run starts at its first reading within U_TOL of U, so
-' a 30 V check that steps straight to U without switching off is excluded.
+' a 30 V check that steps straight to U without switching off is excluded,
+' and ends at its last such reading, so switch-off transients are too.
 ' I30V comes from the first 30 V stretch at or before the run start.
 Private Function FindRun(tS() As Double, vA() As Double, aA() As Double, n As Long, _
                          ByRef iStart As Long, ByRef iEnd As Long, ByRef U As Double, _
@@ -186,7 +187,12 @@ NextI:
     Do While iStart < best1 And Abs(vA(iStart) - U) > U_TOL
         iStart = iStart + 1
     Loop
+    ' likewise drop switch-off transients at the end (e.g. one 12 V / 131 mA
+    ' reading logged while the supply ramps down)
     iEnd = best1
+    Do While iEnd > iStart And Abs(vA(iEnd) - U) > U_TOL
+        iEnd = iEnd - 1
+    Loop
 
     ' 30 V check: first reading within U_TOL of 30 V up to the run start
     has30 = False
