@@ -495,7 +495,7 @@ Private Function SeriesColors(scheme As String, n As Long) As Long()
         Case "gradient"
             For i = 1 To n
                 If n > 1 Then t = (i - 1) / (n - 1) Else t = 0
-                c(i) = HsvToRgb(120# * (1# - t), 0.95, 0.7)
+                c(i) = HsvToRgb(120# * (1# - t), 0.95, 0.55)
             Next i
             SeriesColors = c
             Exit Function
