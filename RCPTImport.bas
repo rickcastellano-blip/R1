@@ -127,7 +127,8 @@ Private Function ParseRCPT(path As String, ByRef dTest As Date, _
                            ByRef isPartial As Boolean, ByRef availHrs As Double) As String
     Dim ff As Integer, txt As String, lines() As String
     Dim i As Long, ln As String
-    Dim p1 As Long, p2 As Long, p3 As Long, p4 As Long
+    Dim f() As String, hdrMsg As String
+    Dim tCol As Long, vCol As Long, aCol As Long, maxCol As Long
     Dim v As Double, a As Double, tsec As Double
     Dim t0 As Double, s As Double, prevS As Double, prevA As Double
     Dim prevT As Double, prevV As Double, onSec As Double
@@ -156,22 +157,27 @@ Private Function ParseRCPT(path As String, ByRef dTest As Date, _
     ReDim tArr(1 To cap)
     ReDim aArr(1 To cap)
 
+    ' Default layout TimeStamp,Volts,TimeStamp,Amps (0-based columns);
+    ' replaced by the #TimeStamp header row when the file has one
+    tCol = 0: vCol = 1: aCol = 3: maxCol = 3
+
     For i = 0 To UBound(lines)
         ln = lines(i)
         If Len(ln) > 20 Then
-            If Left$(ln, 1) <> "#" Then
-                p1 = InStr(1, ln, ",")
-                If p1 = 0 Then GoTo NextLine
-                p2 = InStr(p1 + 1, ln, ",")
-                If p2 = 0 Then GoTo NextLine
-                p3 = InStr(p2 + 1, ln, ",")
-                If p3 = 0 Then GoTo NextLine
-                p4 = InStr(p3 + 1, ln, ",")
-                If p4 = 0 Then GoTo NextLine
+            If StrComp(Left$(ln, 10), "#TimeStamp", vbTextCompare) = 0 Then
+                hdrMsg = MapColumns(ln, tCol, vCol, aCol)
+                If Len(hdrMsg) > 0 Then ParseRCPT = hdrMsg: Exit Function
+                maxCol = tCol
+                If vCol > maxCol Then maxCol = vCol
+                If aCol > maxCol Then maxCol = aCol
+            ElseIf Left$(ln, 1) <> "#" Then
+                f = Split(ln, ",")
+                If UBound(f) < maxCol Then GoTo NextLine
+                If Len(f(vCol)) = 0 Or Len(f(aCol)) = 0 Or Len(f(tCol)) < 19 Then GoTo NextLine
 
-                v = Val(Mid$(ln, p1 + 1, p2 - p1 - 1))
-                a = Val(Mid$(ln, p3 + 1, p4 - p3 - 1))
-                tsec = StampToSeconds(Left$(ln, p1 - 1))
+                v = Val(f(vCol))
+                a = Val(f(aCol))
+                tsec = StampToSeconds(f(tCol))
 
                 If havePrev Then
                     If v > V_THRESHOLD And prevV > V_THRESHOLD Then
@@ -183,9 +189,9 @@ Private Function ParseRCPT(path As String, ByRef dTest As Date, _
                     If v > V_THRESHOLD Then
                         found0 = True
                         t0 = tsec
-                        dTest = DateSerial(CLng(Mid$(ln, 1, 4)), _
-                                           CLng(Mid$(ln, 6, 2)), _
-                                           CLng(Mid$(ln, 9, 2)))
+                        dTest = DateSerial(CLng(Mid$(f(tCol), 1, 4)), _
+                                           CLng(Mid$(f(tCol), 6, 2)), _
+                                           CLng(Mid$(f(tCol), 9, 2)))
                         prevS = 0
                         prevA = a
                         nUsed = 1
@@ -253,6 +259,35 @@ Fail:
     On Error Resume Next
     Close #ff
     ParseRCPT = "Could not read the file:" & vbCrLf & path & vbCrLf & vbCrLf & Err.Description
+End Function
+
+' Finds the first Volts and first Amps columns in the "#TimeStamp,..." header row,
+' and the TimeStamp column that belongs to that Amps column. Handles the 5-column
+' layout (TimeStamp,Volts,TimeStamp,Amps) and the older 9-column one
+' (TimeStamp,Volts,TimeStamp,Volts,TimeStamp,Amps,TimeStamp,Amps).
+Private Function MapColumns(hdrLine As String, ByRef tCol As Long, _
+                            ByRef vCol As Long, ByRef aCol As Long) As String
+    Dim h() As String, k As Long
+
+    h = Split(Mid$(hdrLine, 2), ",")
+    tCol = -1: vCol = -1: aCol = -1
+    For k = 0 To UBound(h)
+        Select Case LCase$(Trim$(h(k)))
+            Case "volts": If vCol < 0 Then vCol = k
+            Case "amps":  If aCol < 0 Then aCol = k
+        End Select
+    Next k
+
+    If vCol < 0 Or aCol < 0 Then
+        MapColumns = "The header row has no " & IIf(vCol < 0, "Volts", "Amps") & _
+                     " column - is this a TTi RCPT log?" & vbCrLf & vbCrLf & hdrLine
+        Exit Function
+    End If
+
+    For k = aCol - 1 To 0 Step -1
+        If LCase$(Trim$(h(k))) = "timestamp" Then tCol = k: Exit For
+    Next k
+    If tCol < 0 Then tCol = 0
 End Function
 
 Private Sub AddPoint(ByRef tArr() As Double, ByRef aArr() As Double, _
