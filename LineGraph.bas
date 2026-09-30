@@ -637,7 +637,11 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     On Error GoTo Done
     If eW <= 0 Or eW > w1 Or eH <= 0 Or n * eH > h1 Then eW = w1: eH = h1 / n
     padW = w1 - eW
+    ' The auto-sized legend can come out taller than its entries (95 pt for
+    ' five 13.2 pt entries), so the box padding is capped rather than trusted.
     padH = h1 - n * eH
+    If padH > 8 Then padH = 8
+    If padH < 4 Then padH = 4
     Debug.Print "Legend measured: one column " & Format(w1, "0.0") & "x" & Format(h1, "0.0") & _
                 " pt, entry " & Format(eW, "0.0") & "x" & Format(eH, "0.0") & _
                 " pt; plot " & Format(pL, "0") & "," & Format(pT, "0") & " " & _
