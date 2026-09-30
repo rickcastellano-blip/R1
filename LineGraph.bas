@@ -562,7 +562,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     Dim xHi0 As Double, yHi0 As Double, kMax As Long
     Dim iter As Long, k As Long, corner As Long, rws As Long, hits As Long, sc As Long
     Dim lw As Double, lh As Double, lx As Double, ly As Double
-    Dim bK As Long, fK As Long, bC As Long, fC As Long
+    Dim bK As Long, fK As Long, bC As Long, fC As Long, eWh As Double, gapH As Double
     Dim bSc As Long, bHits As Long, bW As Double, bH As Double, bX As Double, bY As Double
     Dim fSc As Long, fHits As Long, fW As Double, fH As Double, fX As Double, fY As Double
 
@@ -642,6 +642,29 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     padH = h1 - n * eH
     If padH > 8 Then padH = 8
     If padH < 4 Then padH = 4
+
+    ' Horizontal layout (used for 2 columns) spaces entries differently:
+    ' measure its entry width and the step between neighbouring entries.
+    eWh = eW: gapH = 12
+    If n >= 2 Then
+        On Error Resume Next
+        ch.Legend.Position = xlLegendPositionTop
+        ch.Legend.IncludeInLayout = False
+        ch.Refresh
+        DoEvents
+        eWh = 0
+        For i = 1 To ch.Legend.LegendEntries.Count
+            If ch.Legend.LegendEntries(i).Width > eWh Then eWh = ch.Legend.LegendEntries(i).Width
+        Next i
+        If ch.Legend.LegendEntries(2).Top = ch.Legend.LegendEntries(1).Top Then
+            gapH = ch.Legend.LegendEntries(2).Left - ch.Legend.LegendEntries(1).Left - eWh
+        End If
+        ch.Legend.Position = xlLegendPositionRight
+        ch.Legend.IncludeInLayout = False
+        On Error GoTo Done
+        If eWh <= 0 Then eWh = eW
+        If gapH < 4 Or gapH > 40 Then gapH = 12
+    End If
     kMax = n: If kMax > 2 Then kMax = 2          ' 1 or 2 columns
     xHi0 = ch.Axes(xlCategory).MaximumScale
     yHi0 = ch.Axes(xlValue).MaximumScale
@@ -652,7 +675,11 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         bSc = 2147483647
         For k = 1 To kMax
             rws = -Int(-n / k)
-            lw = k * eW + padW + (k - 1) * 12    ' 12 pt between columns
+            If k = 1 Then
+                lw = eW + padW
+            Else                                 ' measured horizontal entries + a little slack
+                lw = k * eWh + (k - 1) * gapH + padW + 4
+            End If
             lh = rws * eH + padH + 1
             If lw <= pW - 2 * insX And lh <= pH - 2 * insY Then
                 For corner = 0 To 3                  ' 0 TR, 1 TL, 2 BR, 3 BL
