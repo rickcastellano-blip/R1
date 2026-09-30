@@ -497,9 +497,10 @@ End Sub
 ' One colour per series (1..n).
 '   standard  - xgrapher color1 palette, repeating after 13
 '   stoplight - green, yellow, red, dark red, repeating after 4
-'   gradient  - hue slides from green (first series) to red (last) via yellow
+'   gradient  - hue slides from green (first series) to red (last) via yellow,
+'               leaving green quickly so neighbouring series differ
 Private Function SeriesColors(scheme As String, n As Long) As Long()
-    Dim c() As Long, pal As Variant, i As Long, t As Double
+    Dim c() As Long, pal As Variant, i As Long, t As Double, hue As Double
 
     If n < 1 Then n = 1
     ReDim c(1 To n)
@@ -509,7 +510,10 @@ Private Function SeriesColors(scheme As String, n As Long) As Long()
         Case "gradient"
             For i = 1 To n
                 If n > 1 Then t = (i - 1) / (n - 1) Else t = 0
-                c(i) = HsvToRgb(120# * (1# - t), 0.95, 0.55)
+                ' green half bends toward yellow (hue ~ (1-2t)^2) so the
+                ' second series isn't mistaken for the first; red half linear
+                If t < 0.5 Then hue = 60# + 60# * (1# - 2# * t) ^ 2 Else hue = 120# * (1# - t)
+                c(i) = HsvToRgb(hue, 0.95, 0.55)
             Next i
             SeriesColors = c
             Exit Function
