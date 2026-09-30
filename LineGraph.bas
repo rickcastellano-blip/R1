@@ -18,7 +18,7 @@ Private Const LG_TOP        As Double = 0.086
 Private Const LG_LINESP     As Double = 1.45
 Private Const TICK_OFFSET   As Long = 20
 Private Const DO_LABELS     As Boolean = True    ' xgrapher: dolabels
-Private Const MAT_FS_TEXT   As Double = 15       ' xgrapher: fs (point-label FontSize)
+Private Const LABEL_FS      As Double = 10       ' point-label font size (pt, not scaled)
 ' settings cells on the Buttons sheet of this workbook
 Private Const SETTINGS_SHEET As String = "Buttons"
 Private Const LINE_CELL      As String = "K6"     ' 1 = connecting lines, 0 = markers only
@@ -145,7 +145,7 @@ Sub GenerateLineGraph()
     fsT = Application.Max(1, Round(MAT_FS_TICKS * sc, 1))
     fsA = Application.Max(1, Round(MAT_FS_LABEL * sc, 1))
     fsL = fsT
-    fsTx = Application.Max(1, Round(MAT_FS_TEXT * sc, 1))
+    fsTx = LABEL_FS
     wAX = Application.Max(0.25, Round(MAT_LINEW * sc, 2))
     wPL = Application.Max(0.25, Round(MAT_PLOTW * sc, 2))
     msz = Application.Min(72, Application.Max(2, Round(MAT_MS * sc * 0.5, 0)))
@@ -282,13 +282,10 @@ Sub GenerateLineGraph()
             .MinimumScaleIsAuto = True
             .MaximumScaleIsAuto = True
         Else
-            NiceScale maxX, axMax, axStep
-            If minX < 0 Then
-                .MinimumScaleIsAuto = True
-            Else
-                .MinimumScale = 0
-            End If
+            ' fitted to the data; starts at 0 only when that adds little
+            NiceRange minX, maxX, axMin, axMax, axStep
             .MaximumScale = axMax
+            .MinimumScale = axMin
             .MajorUnit = axStep
         End If
         .HasMajorGridlines = False
@@ -726,3 +723,34 @@ Private Function MapV(ByVal v As Double, ByVal lo As Double, ByVal hi As Double,
     If flip Then outP = p0 + (1 - f) * span Else outP = p0 + f * span
     MapV = True
 End Function
+
+' Axis bounds fitted to lo..hi: the smallest step of 1, 2, 2.5 or 5 x 10^n
+' that spans the data in at most 6 steps, with the bounds on whole steps.
+' For non-negative data the minimum drops to 0 when that stretches the
+' axis by no more than a quarter of its span; otherwise it stays near the
+' data (e.g. 0.33..0.55 -> 0.30..0.55, but 0.05..0.55 -> 0..0.6).
+Private Sub NiceRange(ByVal lo As Double, ByVal hi As Double, ByRef axMin As Double, _
+                      ByRef axMax As Double, ByRef axStep As Double)
+    Dim span As Double, e As Double, m As Variant, i As Long, s As Double
+    Dim a As Double, b As Double
+
+    If hi < lo Then a = lo: lo = hi: hi = a
+    span = hi - lo
+    If span <= 0 Then span = Abs(hi)
+    If span <= 0 Then span = 1
+    e = 10 ^ Int(Log(span) / Log(10#))
+    m = Array(0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20)
+    For i = LBound(m) To UBound(m)
+        s = e * m(i)
+        a = s * Int(lo / s + 0.000000001)          ' floor to a whole step
+        b = -s * Int(-(hi / s) + 0.000000001)      ' ceiling to a whole step
+        If b <= a Then b = a + s
+        If (b - a) / s <= 6.000000001 Then Exit For
+    Next i
+
+    If lo >= 0 And a > 0 And a <= 0.25 * (b - a) Then
+        NiceRange 0, hi, axMin, axMax, axStep
+        Exit Sub
+    End If
+    axMin = Round(a, 12): axMax = Round(b, 12): axStep = Round(s, 12)
+End Sub
