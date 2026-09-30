@@ -196,14 +196,22 @@ Sub GenerateLineGraph()
                 128 + ((clr(j) \ &H100&) And &HFF&) \ 2, _
                 128 + ((clr(j) \ &H10000) And &HFF&) \ 2)
             ' Excel ties the marker outline to the series line format, so the
-            ' Line Width setting (M7) sets both; with markers only it sets
-            ' just the outline, as there is no connecting line to draw.
+            ' Line Width setting (M7) sets both. With markers only (J7 = 0),
+            ' touching the line format switches a connecting line on, so it is
+            ' switched off again and the marker colours re-applied: no line,
+            ' ever, when J7 is 0.
             If useLine Then
                 .Format.Line.Visible = msoTrue
                 .Format.Line.ForeColor.RGB = clr(j)
                 If lwSet > 0 Then .Format.Line.Weight = lwSet Else .Format.Line.Weight = wPL
             ElseIf lwSet > 0 Then
                 .Format.Line.Weight = lwSet
+                .Format.Line.Visible = msoFalse
+                .MarkerForegroundColor = clr(j)
+                .MarkerBackgroundColor = RGB( _
+                    128 + (clr(j) And &HFF&) \ 2, _
+                    128 + ((clr(j) \ &H100&) And &HFF&) \ 2, _
+                    128 + ((clr(j) \ &H10000) And &HFF&) \ 2)
             End If
             ' col 3 = +/- Y error, col 4 = +/- X error (xgrapher errorbar signature)
             If hasE1 And lblC(j) <> e1C Then
