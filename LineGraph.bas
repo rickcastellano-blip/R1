@@ -21,7 +21,7 @@ Private Const DO_LABELS     As Boolean = True    ' xgrapher: dolabels
 Private Const LABEL_FS      As Double = 10       ' point-label font size (pt, not scaled)
 ' settings cells on the Buttons sheet of this workbook
 Private Const SETTINGS_SHEET As String = "Buttons"
-Private Const LINE_CELL      As String = "K6"     ' 1 = connecting lines, 0 = markers only
+Private Const LINE_CELL      As String = "J7"     ' 1 = connecting lines, 0 = markers only
 Private Const SCHEME_CELL    As String = "K7"     ' standard / stoplight / green->red
 ' =========================================================
 Sub GenerateLineGraph()
@@ -467,7 +467,7 @@ Private Function CellText(v As Variant) As String
     If Not IsError(v) Then CellText = Trim$(CStr(v))
 End Function
 
-' K6: 0 = markers only, anything else (1, blank) = connecting lines.
+' J7: 0 = markers only, anything else (1, blank) = connecting lines.
 ' K7: "stoplight", "green->red" (anything starting "green"), else standard.
 ' Missing sheet or cells fall back to lines + standard.
 Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String)
