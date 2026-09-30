@@ -555,7 +555,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     Dim j As Long, r As Long, tot As Long, x As Variant, y As Variant, e As Variant
     Dim txt As String, half As Double, hasPrev As Boolean, prevX As Double, prevY As Double
     Dim pL As Double, pT As Double, pW As Double, pH As Double, insX As Double, insY As Double
-    Dim w1 As Double, h1 As Double, xLo As Double, xHi As Double, yLo As Double, yHi As Double
+    Dim w1 As Double, h1 As Double, eW As Double, eH As Double, padW As Double, padH As Double
+    Dim i As Long, xLo As Double, xHi As Double, yLo As Double, yHi As Double
     Dim xHi0 As Double, yHi0 As Double, kMax As Long
     Dim iter As Long, k As Long, corner As Long, rws As Long, hits As Long, sc As Long
     Dim lw As Double, lh As Double, lx As Double, ly As Double
@@ -622,6 +623,18 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         h1 = .Height
     End With
     If h1 < n * lineH Then h1 = n * lineH + 4     ' Excel squeezed it: fall back
+
+    ' Size of the largest single entry (Excel 2010+), so a k-column legend is
+    ' k entries wide plus the box padding, not k whole one-column legends.
+    On Error Resume Next
+    For i = 1 To ch.Legend.LegendEntries.Count
+        If ch.Legend.LegendEntries(i).Width > eW Then eW = ch.Legend.LegendEntries(i).Width
+        If ch.Legend.LegendEntries(i).Height > eH Then eH = ch.Legend.LegendEntries(i).Height
+    Next i
+    On Error GoTo Done
+    If eW <= 0 Or eW > w1 Or eH <= 0 Or n * eH > h1 Then eW = w1: eH = h1 / n
+    padW = w1 - eW
+    padH = h1 - n * eH
     kMax = n: If kMax > 3 Then kMax = 3
     xHi0 = ch.Axes(xlCategory).MaximumScale
     yHi0 = ch.Axes(xlValue).MaximumScale
@@ -632,8 +645,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         bSc = 2147483647
         For k = 1 To kMax
             rws = -Int(-n / k)
-            lw = k * w1                          ' full width per column: no wrapping
-            lh = rws * h1 / n + 2                ' measured height per entry
+            lw = k * eW + padW + (k - 1) * 8     ' 8 pt between columns
+            lh = rws * eH + padH + 1
             If lw <= pW - 2 * insX And lh <= pH - 2 * insY Then
                 For corner = 0 To 3                  ' 0 TR, 1 TL, 2 BR, 3 BL
                     If corner Mod 2 = 0 Then lx = pL + pW - insX - lw Else lx = pL + insX

@@ -285,8 +285,7 @@ Sub GenerateStrengthBarGraph()
     On Error GoTo 0
 
     co.Width = W: co.Height = H
-    MsgBox "Chart created in '" & tws.Parent.Name & "' on '" & tws.Name & "'." & vbCrLf & _
-           nRow & " x-labels x " & nBlk & " series.", vbInformation
+    ch.Refresh                               ' draw the final layout now
 End Sub
 
 
