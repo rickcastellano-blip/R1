@@ -24,6 +24,7 @@ Private Const SETTINGS_SHEET As String = "Buttons"
 Private Const LINE_CELL      As String = "J7"     ' 1 = connecting lines, 0 = markers only
 Private Const SCHEME_CELL    As String = "K7"     ' standard / stoplight / green->red
 Private Const MARKER_CELL    As String = "L7"     ' marker size in pt (2-72); blank = default
+Private Const LINEW_CELL     As String = "M7"     ' line + marker outline width in pt; blank = default
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range, f As Range
@@ -47,7 +48,7 @@ Sub GenerateLineGraph()
     Dim wAX As Double, wPL As Double, msz As Double
     Dim axMax As Double, axStep As Double, axMin As Double
     Dim lblC() As Long, fsTx As Double, legCorner As Long
-    Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double
+    Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
 
     '--- 1. pick the range (you can switch workbooks in this dialog) --------
     On Error Resume Next
@@ -152,7 +153,7 @@ Sub GenerateLineGraph()
     msz = Application.Min(72, Application.Max(2, Round(MAT_MS * sc * 0.5, 0)))
 
     '--- 4b. line / colour settings from the Buttons sheet ----------------
-    ReadSettings useLine, scheme, mSet
+    ReadSettings useLine, scheme, mSet, lwSet
     If mSet > 0 Then msz = mSet               ' Marker Size setting overrides the default
     clr = SeriesColors(scheme, nBlk)
 
@@ -194,10 +195,15 @@ Sub GenerateLineGraph()
                 128 + (clr(j) And &HFF&) \ 2, _
                 128 + ((clr(j) \ &H100&) And &HFF&) \ 2, _
                 128 + ((clr(j) \ &H10000) And &HFF&) \ 2)
+            ' Excel ties the marker outline to the series line format, so the
+            ' Line Width setting (M7) sets both; with markers only it sets
+            ' just the outline, as there is no connecting line to draw.
             If useLine Then
                 .Format.Line.Visible = msoTrue
                 .Format.Line.ForeColor.RGB = clr(j)
-                .Format.Line.Weight = wPL
+                If lwSet > 0 Then .Format.Line.Weight = lwSet Else .Format.Line.Weight = wPL
+            ElseIf lwSet > 0 Then
+                .Format.Line.Weight = lwSet
             End If
             ' col 3 = +/- Y error, col 4 = +/- X error (xgrapher errorbar signature)
             If hasE1 And lblC(j) <> e1C Then
@@ -475,10 +481,13 @@ End Function
 ' J7: 0 = markers only, anything else (1, blank) = connecting lines.
 ' K7: "stoplight", "green->red" (anything starting "green"), else standard.
 ' L7: marker size in points, 2-72; blank or text keeps the default size.
+' M7: width in points (0.25-10) of the connecting line and marker outline;
+'     blank or text keeps the defaults.
 ' Missing sheet or cells fall back to lines + standard + default size.
-Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef mSize As Double)
+Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef mSize As Double, _
+                         ByRef lineW As Double)
     Dim ws As Worksheet, v As Variant
-    useLine = True: scheme = "standard": mSize = 0
+    useLine = True: scheme = "standard": mSize = 0: lineW = 0
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
     On Error GoTo 0
@@ -501,6 +510,13 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef
         mSize = Round(CDbl(v), 0)
         If mSize < 2 Then mSize = 2
         If mSize > 72 Then mSize = 72            ' Excel's marker size range
+    End If
+
+    v = ws.Range(LINEW_CELL).Value
+    If IsNum(v) Then
+        lineW = CDbl(v)
+        If lineW < 0.25 Then lineW = 0.25
+        If lineW > 10 Then lineW = 10
     End If
 End Sub
 
