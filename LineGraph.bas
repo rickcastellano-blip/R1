@@ -265,6 +265,7 @@ Sub GenerateLineGraph()
             With .AxisTitle
                 .Orientation = xlUpward
                 .Text = yTitle
+                LinkTitle ch.Axes(xlValue).AxisTitle, tws.Cells(tagR + 1, yC)
                 .Font.Name = FONT_NAME
                 .Font.Size = fsA
                 .Font.Bold = False
@@ -302,6 +303,7 @@ Sub GenerateLineGraph()
         If Len(xTitle) > 0 Then
             With .AxisTitle
                 .Text = xTitle
+                LinkTitle ch.Axes(xlCategory).AxisTitle, tws.Cells(tagR + 1, xC)
                 .Font.Name = FONT_NAME
                 .Font.Size = fsA
                 .Font.Bold = False
@@ -848,4 +850,12 @@ Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, B
         End If
     End With
     ch.Refresh
+End Sub
+
+' Link an axis title to the cell it was read from, so editing the cell
+' updates the chart (same as typing =Sheet!$A$1 in the title). If Excel
+' can't link it (older versions), the title keeps its plain text.
+Private Sub LinkTitle(t As AxisTitle, c As Range)
+    On Error Resume Next
+    t.Formula = "='" & Replace(c.Worksheet.Name, "'", "''") & "'!" & c.Address(True, True)
 End Sub

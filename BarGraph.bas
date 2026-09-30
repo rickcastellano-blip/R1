@@ -209,6 +209,8 @@ Sub GenerateStrengthBarGraph()
         With .AxisTitle
             .Orientation = xlUpward
             .Text = yTitle
+            ' linked only when the cell has a title (otherwise it stays "Value")
+            If Len(CellText(tws.Cells(tagR + 1, valC).Value)) > 0 Then LinkTitle ch.Axes(xlValue).AxisTitle, tws.Cells(tagR + 1, valC)
             .Font.Name = FONT_NAME
             .Font.Size = fsA
             .Font.Bold = False
@@ -316,3 +318,11 @@ End Function
 Private Function CellText(v As Variant) As String
     If Not IsError(v) Then CellText = Trim$(CStr(v))
 End Function
+
+' Link an axis title to the cell it was read from, so editing the cell
+' updates the chart (same as typing =Sheet!$A$1 in the title). If Excel
+' can't link it (older versions), the title keeps its plain text.
+Private Sub LinkTitle(t As AxisTitle, c As Range)
+    On Error Resume Next
+    t.Formula = "='" & Replace(c.Worksheet.Name, "'", "''") & "'!" & c.Address(True, True)
+End Sub
