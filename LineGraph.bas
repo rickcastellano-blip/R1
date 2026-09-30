@@ -554,8 +554,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                         ByVal xLog As Boolean, ByVal yLog As Boolean, _
                         blkRow() As Long, rc() As Long, ByVal xC As Long, ByVal yC As Long, _
                         ByVal eC As Long, lblC() As Long)
-    Dim oX() As Double, oY() As Double, oL() As Double, oT() As Double
-    Dim oR() As Double, oB() As Double, nO As Long
+    Dim oX() As Double, oY() As Double, offL() As Double, offT() As Double
+    Dim offR() As Double, offB() As Double, nO As Long
     Dim sX1() As Double, sY1() As Double, sX2() As Double, sY2() As Double, nS As Long
     Dim j As Long, r As Long, tot As Long, x As Variant, y As Variant, e As Variant
     Dim txt As String, half As Double, hasPrev As Boolean, prevX As Double, prevY As Double
@@ -572,8 +572,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     ' obstacles: point boxes (data anchor + point offsets) and line segments
     For j = 1 To n: tot = tot + rc(j): Next j
     If tot = 0 Then Exit Sub
-    ReDim oX(1 To 2 * tot): ReDim oY(1 To 2 * tot): ReDim oL(1 To 2 * tot)
-    ReDim oT(1 To 2 * tot): ReDim oR(1 To 2 * tot): ReDim oB(1 To 2 * tot)
+    ReDim oX(1 To 2 * tot): ReDim oY(1 To 2 * tot): ReDim offL(1 To 2 * tot)
+    ReDim offT(1 To 2 * tot): ReDim offR(1 To 2 * tot): ReDim offB(1 To 2 * tot)
     ReDim sX1(1 To 2 * tot): ReDim sY1(1 To 2 * tot): ReDim sX2(1 To 2 * tot): ReDim sY2(1 To 2 * tot)
     half = msz / 2 + 1
     For j = 1 To n
@@ -583,14 +583,14 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
             If IsNum(x) And IsNum(y) Then
                 nO = nO + 1
                 oX(nO) = CDbl(x): oY(nO) = CDbl(y)
-                oL(nO) = -half: oR(nO) = half: oT(nO) = -half: oB(nO) = half
+                offL(nO) = -half: offR(nO) = half: offT(nO) = -half: offB(nO) = half
                 If DO_LABELS And lblC(j) > 0 Then
                     txt = CellText(tws.Cells(r, lblC(j)).Value)
                     If Len(txt) > 0 Then
                         nO = nO + 1
                         oX(nO) = CDbl(x): oY(nO) = CDbl(y)
-                        oL(nO) = half: oR(nO) = half + 4 + Len(txt) * fsTx * 0.55
-                        oT(nO) = -fsTx * 0.6: oB(nO) = fsTx * 0.6
+                        offL(nO) = half: offR(nO) = half + 4 + Len(txt) * fsTx * 0.55
+                        offT(nO) = -fsTx * 0.6: offB(nO) = fsTx * 0.6
                     End If
                 End If
                 If eC > 0 And lblC(j) <> eC Then
@@ -630,7 +630,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                 For corner = 0 To 3                  ' 0 TR, 1 TL, 2 BR, 3 BL
                     If corner Mod 2 = 0 Then lx = pL + pW - insX - lw Else lx = pL + insX
                     If corner < 2 Then ly = pT + insY Else ly = pT + pH - insY - lh
-                    hits = LegendHits(lx, ly, lw, lh, nO, oX, oY, oL, oT, oR, oB, _
+                    hits = LegendHits(lx, ly, lw, lh, nO, oX, oY, offL, offT, offR, offB, _
                                       nS, sX1, sY1, sX2, sY2, xLo, xHi, yLo, yHi, _
                                       xLog, yLog, pL, pT, pW, pH)
                     sc = hits * 1000 + (k - 1) * 4 + corner
@@ -673,7 +673,7 @@ End Sub
 ' Number of obstacles the legend box (plus a 2 pt margin) would cover.
 Private Function LegendHits(ByVal lx As Double, ByVal ly As Double, ByVal lw As Double, _
                             ByVal lh As Double, ByVal nO As Long, oX() As Double, oY() As Double, _
-                            oL() As Double, oT() As Double, oR() As Double, oB() As Double, _
+                            offL() As Double, offT() As Double, offR() As Double, offB() As Double, _
                             ByVal nS As Long, sX1() As Double, sY1() As Double, _
                             sX2() As Double, sY2() As Double, _
                             ByVal xLo As Double, ByVal xHi As Double, _
@@ -682,25 +682,25 @@ Private Function LegendHits(ByVal lx As Double, ByVal ly As Double, ByVal lw As 
                             ByVal pL As Double, ByVal pT As Double, _
                             ByVal pW As Double, ByVal pH As Double) As Long
     Const PAD As Double = 2
-    Dim i As Long, m As Long, ax As Double, ay As Double, bx As Double, by As Double
+    Dim i As Long, m As Long, p1x As Double, p1y As Double, p2x As Double, p2y As Double
     Dim qx As Double, qy As Double, x0 As Double, x1 As Double, y0 As Double, y1 As Double
 
     x0 = lx - PAD: x1 = lx + lw + PAD: y0 = ly - PAD: y1 = ly + lh + PAD
     For i = 1 To nO
-        If MapV(oX(i), xLo, xHi, xLog, pL, pW, False, ax) And _
-           MapV(oY(i), yLo, yHi, yLog, pT, pH, True, ay) Then
-            If ax + oR(i) > x0 And ax + oL(i) < x1 And ay + oB(i) > y0 And ay + oT(i) < y1 Then
+        If MapV(oX(i), xLo, xHi, xLog, pL, pW, False, p1x) And _
+           MapV(oY(i), yLo, yHi, yLog, pT, pH, True, p1y) Then
+            If p1x + offR(i) > x0 And p1x + offL(i) < x1 And p1y + offB(i) > y0 And p1y + offT(i) < y1 Then
                 LegendHits = LegendHits + 1
             End If
         End If
     Next i
     For i = 1 To nS
-        If MapV(sX1(i), xLo, xHi, xLog, pL, pW, False, ax) And _
-           MapV(sY1(i), yLo, yHi, yLog, pT, pH, True, ay) And _
-           MapV(sX2(i), xLo, xHi, xLog, pL, pW, False, bx) And _
-           MapV(sY2(i), yLo, yHi, yLog, pT, pH, True, by) Then
+        If MapV(sX1(i), xLo, xHi, xLog, pL, pW, False, p1x) And _
+           MapV(sY1(i), yLo, yHi, yLog, pT, pH, True, p1y) And _
+           MapV(sX2(i), xLo, xHi, xLog, pL, pW, False, p2x) And _
+           MapV(sY2(i), yLo, yHi, yLog, pT, pH, True, p2y) Then
             For m = 0 To 20
-                qx = ax + (bx - ax) * m / 20: qy = ay + (by - ay) * m / 20
+                qx = p1x + (p2x - p1x) * m / 20: qy = p1y + (p2y - p1y) * m / 20
                 If qx > x0 And qx < x1 And qy > y0 And qy < y1 Then
                     LegendHits = LegendHits + 1
                     Exit For
