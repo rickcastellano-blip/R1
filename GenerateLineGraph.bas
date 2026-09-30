@@ -419,3 +419,18 @@ Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double)
         End If
     Next i
 End Sub
+
+' Axis max rounded up to a nice value with <= 6 steps (same as the bar graph's;
+' each module keeps its own copy so the two never depend on each other).
+Private Sub NiceScale(ByVal raw As Double, ByRef axMax As Double, ByRef axStep As Double)
+    Dim e As Double, m As Variant, i As Long, s As Double, n As Long
+    If raw <= 0 Then axMax = 1: axStep = 0.2: Exit Sub
+    e = 10 ^ Int(Log(raw) / Log(10#))
+    m = Array(0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10)
+    For i = LBound(m) To UBound(m)
+        s = e * m(i)
+        n = -Int(-raw / s)
+        If n <= 6 Then axStep = s: axMax = s * n: Exit Sub
+    Next i
+    axStep = e: axMax = e * (-Int(-raw / e))
+End Sub

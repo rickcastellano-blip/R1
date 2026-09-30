@@ -290,7 +290,7 @@ Sub GenerateStrengthBarGraph()
 End Sub
 
 
-Public Sub NiceScale(ByVal raw As Double, ByRef axMax As Double, ByRef axStep As Double)
+Private Sub NiceScale(ByVal raw As Double, ByRef axMax As Double, ByRef axStep As Double)
     Dim e As Double, m As Variant, i As Long, s As Double, n As Long
     If raw <= 0 Then axMax = 1: axStep = 0.2: Exit Sub
     e = 10 ^ Int(Log(raw) / Log(10#))

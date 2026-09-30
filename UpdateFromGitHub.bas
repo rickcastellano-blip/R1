@@ -3,29 +3,38 @@ Option Explicit
 '=========================== CONFIG ===========================
 Private Const GH_REPO    As String = "rickcastellano-blip/R1"
 Private Const GH_BRANCH  As String = "claude/tender-ramanujan-047vzz"
-' module name in this workbook = file in the repo, separated by ";"
-Private Const MODULE_MAP As String = _
-    "Module4=GenerateLineGraph.bas;" & _
-    "Module3=GenerateStrengthBarGraph.bas"
-Private Const NT492_MAP  As String = "NTBuild492=NTBuild492.bas"
+' one button per macro: "module in this workbook=file in the repo"
+Private Const BAR_MAP    As String = "Module3=GenerateStrengthBarGraph.bas"
+Private Const LINE_MAP   As String = "Module4=GenerateLineGraph.bas"
 Private Const RCPT_MAP   As String = "Module1=RCPTImport.bas"
+Private Const RECOV_MAP  As String = "Module2=RCPTRecovered.bas"
+Private Const NT492_MAP  As String = "NTBuild492=NTBuild492.bas"
 '==============================================================
 
-' Button macros: pull the latest code for every module in a map from GitHub
-' and replace that module's code in this workbook (a missing module is
-' created). This module is never overwritten, so keep it separate from the
+' Button macros, one per button on the Buttons sheet. Each replaces the code
+' of exactly one module with its file from GitHub (a missing module is
+' created); every module is self-contained, so no update affects another
+' button. This module is never overwritten, so keep it separate from the
 ' ones it updates. Needs File > Options > Trust Center > Macro Settings >
 ' "Trust access to the VBA project object model".
-Public Sub UpdateFromGitHub()
-    UpdateModules MODULE_MAP
+Public Sub UpdateBarGraph()
+    UpdateModules BAR_MAP
 End Sub
 
-Public Sub UpdateNTBuild492()
-    UpdateModules NT492_MAP
+Public Sub UpdateLineGraph()
+    UpdateModules LINE_MAP
 End Sub
 
 Public Sub UpdateRCPT()
     UpdateModules RCPT_MAP
+End Sub
+
+Public Sub UpdateRCPTRecovered()
+    UpdateModules RECOV_MAP
+End Sub
+
+Public Sub UpdateNTBuild492()
+    UpdateModules NT492_MAP
 End Sub
 
 Private Sub UpdateModules(moduleMap As String)
@@ -123,7 +132,8 @@ Private Function ReplaceModuleCode(vbp As Object, modName As String, code As Str
     End If
     Set cm = comp.CodeModule
     If cm.CountOfLines > 0 Then
-        If InStr(1, cm.Lines(1, cm.CountOfLines), "Sub UpdateFromGitHub(", vbTextCompare) > 0 Then
+        If InStr(1, cm.Lines(1, cm.CountOfLines), "Sub UpdateModules(", vbTextCompare) > 0 Or _
+           InStr(1, cm.Lines(1, cm.CountOfLines), "Sub UpdateFromGitHub(", vbTextCompare) > 0 Then
             ReplaceModuleCode = "that module holds this updater; won't overwrite it": Exit Function
         End If
     End If

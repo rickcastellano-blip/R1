@@ -108,11 +108,15 @@ Cleanup:
 End Sub
 
 '====================== CSV read ==============================
-' TimeStamp,Volts,TimeStamp,Amps,... ; "#" lines are headers.
+' Columns come from the "#TimeStamp,..." header (first Volts, first Amps, and
+' the TimeStamp before that Amps), so the 5-column, 9-column and Test Bridge
+' layouts all read correctly; without such a header TimeStamp,Volts,_,Amps.
+' Rows with a blank reading are skipped.
 Private Function ReadLog(path As String, ByRef tS() As Double, ByRef vA() As Double, _
                          ByRef aA() As Double, ByRef n As Long) As String
     Dim ff As Integer, txt As String, lines() As String, ln As String, f() As String
-    Dim i As Long
+    Dim i As Long, nRows As Long
+    Dim tCol As Long, vCol As Long, aCol As Long, maxCol As Long
 
     On Error GoTo Fail
     ff = FreeFile
@@ -128,16 +132,27 @@ Private Function ReadLog(path As String, ByRef tS() As Double, ByRef vA() As Dou
     ReDim tS(1 To UBound(lines) + 1)
     ReDim vA(1 To UBound(lines) + 1)
     ReDim aA(1 To UBound(lines) + 1)
+    tCol = 0: vCol = 1: aCol = 3: maxCol = 3
     n = 0
     For i = 0 To UBound(lines)
         ln = lines(i)
-        If Len(ln) > 20 And Left$(ln, 1) <> "#" Then
-            f = Split(ln, ",")
-            If UBound(f) >= 3 Then
-                n = n + 1
-                tS(n) = StampToSeconds(f(0))
-                vA(n) = Val(f(1))
-                aA(n) = Val(f(3))
+        If Len(ln) > 20 Then
+            If StrComp(Left$(ln, 10), "#TimeStamp", vbTextCompare) = 0 Then
+                MapColumns ln, tCol, vCol, aCol
+                maxCol = tCol
+                If vCol > maxCol Then maxCol = vCol
+                If aCol > maxCol Then maxCol = aCol
+            ElseIf Left$(ln, 1) <> "#" Then
+                nRows = nRows + 1
+                f = Split(ln, ",")
+                If UBound(f) >= maxCol Then
+                    If Len(Trim$(f(vCol))) > 0 And Len(Trim$(f(aCol))) > 0 And Len(f(tCol)) >= 19 Then
+                        n = n + 1
+                        tS(n) = StampToSeconds(f(tCol))
+                        vA(n) = Val(f(vCol))
+                        aA(n) = Val(f(aCol))
+                    End If
+                End If
             End If
         End If
         If (i And 32767) = 0 Then
@@ -147,7 +162,12 @@ Private Function ReadLog(path As String, ByRef tS() As Double, ByRef vA() As Dou
     Next i
     Erase lines
 
-    If n < 2 Then ReadLog = "No data rows found - is this a TTi measurement CSV?"
+    If n = 0 And nRows > 0 Then
+        ReadLog = "This file has no readings - its " & Format(nRows, "#,##0") & _
+                  " rows are timestamps only, so the logger stored no volts or amps."
+    ElseIf n < 2 Then
+        ReadLog = "No data rows found - is this a TTi measurement CSV?"
+    End If
     Exit Function
 
 Fail:
@@ -155,6 +175,28 @@ Fail:
     Close #ff
     ReadLog = "Could not read the file:" & vbCrLf & path & vbCrLf & vbCrLf & Err.Description
 End Function
+
+' Test Bridge headers can label every channel "Volts"; with no Amps (or no
+' Volts) the default columns are kept.
+Private Sub MapColumns(hdrLine As String, ByRef tCol As Long, _
+                       ByRef vCol As Long, ByRef aCol As Long)
+    Dim h() As String, k As Long, v As Long, a As Long, t As Long
+
+    h = Split(Mid$(hdrLine, 2), ",")
+    v = -1: a = -1: t = 0
+    For k = 0 To UBound(h)
+        Select Case LCase$(Trim$(h(k)))
+            Case "volts": If v < 0 Then v = k
+            Case "amps":  If a < 0 Then a = k
+        End Select
+    Next k
+    If v < 0 Or a < 0 Then Exit Sub
+
+    For k = a - 1 To 0 Step -1
+        If LCase$(Trim$(h(k))) = "timestamp" Then t = k: Exit For
+    Next k
+    tCol = t: vCol = v: aCol = a
+End Sub
 
 '====================== run detection =========================
 ' Main run = longest continuous stretch with V >= V_ON. U = mean voltage of
