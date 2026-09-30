@@ -378,11 +378,7 @@ Sub GenerateLineGraph()
     ch.SetElement msoElementChartTitleNone
     On Error GoTo 0
     co.Width = W: co.Height = H
-    ch.Refresh                               ' draw the final layout before the message
-    DoEvents
-
-    MsgBox "Chart created in '" & tws.Parent.Name & "' on '" & tws.Name & "'." & vbCrLf & _
-           nBlk & " series, " & nPts & " points max.", vbInformation
+    ch.Refresh                               ' draw the final layout now
 End Sub
 
 ' True if any cell in column c, rows r0..r0+n-1, holds non-blank text.
