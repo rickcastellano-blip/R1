@@ -8,6 +8,7 @@ Private Const MODULE_MAP As String = _
     "Module4=GenerateLineGraph.bas;" & _
     "Module3=GenerateStrengthBarGraph.bas"
 Private Const NT492_MAP  As String = "NTBuild492=NTBuild492.bas"
+Private Const RCPT_MAP   As String = "Module1=RCPTImport.bas"
 '==============================================================
 
 ' Button macros: pull the latest code for every module in a map from GitHub
@@ -21,6 +22,10 @@ End Sub
 
 Public Sub UpdateNTBuild492()
     UpdateModules NT492_MAP
+End Sub
+
+Public Sub UpdateRCPT()
+    UpdateModules RCPT_MAP
 End Sub
 
 Private Sub UpdateModules(moduleMap As String)
