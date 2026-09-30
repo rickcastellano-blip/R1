@@ -131,11 +131,17 @@ Sub GenerateLineGraph()
     For j = 1 To nBlk
         If rc(j) > nPts Then nPts = rc(j)
         ' text labels sit in the first non-numeric column after X,Y (xgrapher:
-        ' j+2 if no error columns, j+3 after +/-Y, j+4 after +/-Y and +/-X)
+        ' j+2 if no error columns, j+3 after +/-Y, j+4 after +/-Y and +/-X).
+        ' An empty column ends the search, so text further right (another
+        ' table next to the data) is never taken as labels.
         If ColHasText(tws, blkRow(j), rc(j), e1C) Then
             lblC(j) = e1C
+        ElseIf ColIsBlank(tws, blkRow(j), rc(j), e1C) Then
+            lblC(j) = 0
         ElseIf ColHasText(tws, blkRow(j), rc(j), e2C) Then
             lblC(j) = e2C
+        ElseIf ColIsBlank(tws, blkRow(j), rc(j), e2C) Then
+            lblC(j) = 0
         ElseIf Application.CountA(tws.Cells(blkRow(j), e2C + 1).Resize(rc(j), 1)) > 0 Then
             lblC(j) = e2C + 1
         End If
@@ -399,6 +405,11 @@ Sub GenerateLineGraph()
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
     ch.Refresh                               ' draw the final layout now
 End Sub
+
+' True if every cell in column c, rows r0..r0+n-1, is empty.
+Private Function ColIsBlank(ws As Worksheet, r0 As Long, n As Long, c As Long) As Boolean
+    ColIsBlank = (Application.CountA(ws.Cells(r0, c).Resize(n, 1)) = 0)
+End Function
 
 ' True if any cell in column c, rows r0..r0+n-1, holds non-blank text.
 Private Function ColHasText(ws As Worksheet, r0 As Long, n As Long, c As Long) As Boolean
