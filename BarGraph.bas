@@ -67,7 +67,7 @@ Sub GenerateStrengthBarGraph()
     If xlC > 1 Then nameC = xlC - 1 Else nameC = labC
 
     b = tws.Cells(tagR + 1, valC).Value
-    If Not IsNumeric(b) Then yTitle = Trim$(CStr(b))
+    If Not IsNum(b) Then yTitle = CellText(b)
     If Len(yTitle) = 0 Then yTitle = "Value"
 
     If xlR > 0 Then
@@ -85,17 +85,17 @@ Sub GenerateStrengthBarGraph()
     For r = tagR + 2 To lastR
         b = tws.Cells(r, valC).Value
         c = tws.Cells(r, errC).Value
-        If IsNumeric(b) And b <> "" Then
+        If IsNum(b) Then
             If Not inBlk Then
                 nBlk = nBlk + 1
                 blkRow(nBlk) = r
-                blkLab(nBlk) = Trim$(CStr(tws.Cells(r, labC).Value))
+                blkLab(nBlk) = CellText(tws.Cells(r, labC).Value)
                 rc(nBlk) = 0
                 inBlk = True
             End If
             rc(nBlk) = rc(nBlk) + 1
             dv = CDbl(b): de = 0
-            If IsNumeric(c) And c <> "" Then de = CDbl(c)
+            If IsNum(c) Then de = CDbl(c)
             If dv + de > maxVal Then maxVal = dv + de
         Else
             inBlk = False
@@ -110,14 +110,14 @@ Sub GenerateStrengthBarGraph()
     Set catRng = Nothing
     If xlR > 0 Then
         nLab = 0
-        Do While Len(Trim$(CStr(tws.Cells(xlR + nLab, nameC).Value))) > 0 And nLab < nRow
+        Do While Len(CellText(tws.Cells(xlR + nLab, nameC).Value)) > 0 And nLab < nRow
             nLab = nLab + 1
         Loop
         If nLab > 0 Then Set catRng = tws.Cells(xlR, nameC).Resize(nLab, 1)
         maxLen = 0
         For i = 0 To nLab - 1
-            If Len(CStr(tws.Cells(xlR + i, nameC).Value)) > maxLen Then _
-                maxLen = Len(CStr(tws.Cells(xlR + i, nameC).Value))
+            If Len(CellText(tws.Cells(xlR + i, nameC).Value)) > maxLen Then _
+                maxLen = Len(CellText(tws.Cells(xlR + i, nameC).Value))
         Next i
     End If
 
@@ -302,3 +302,18 @@ Private Sub NiceScale(ByVal raw As Double, ByRef axMax As Double, ByRef axStep A
     Next i
     axStep = e: axMax = e * (-Int(-raw / e))
 End Sub
+
+' True for a number (or numeric text); False for blank, text or an error
+' value such as #N/A, which would otherwise stop the macro on "<> """.
+Private Function IsNum(v As Variant) As Boolean
+    If IsError(v) Or IsEmpty(v) Then Exit Function
+    If VarType(v) = vbString Then
+        If Len(Trim$(v)) = 0 Then Exit Function
+    End If
+    IsNum = IsNumeric(v)
+End Function
+
+' Cell value as trimmed text; "" for an error value.
+Private Function CellText(v As Variant) As String
+    If Not IsError(v) Then CellText = Trim$(CStr(v))
+End Function

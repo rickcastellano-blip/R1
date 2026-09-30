@@ -81,9 +81,9 @@ Sub GenerateLineGraph()
 
     ' axis labels live one row below the tag (xgrapher: xdata{i+1,j}, xdata{i+1,j+1})
     b = tws.Cells(tagR + 1, xC).Value
-    If Not IsNumeric(b) Then xTitle = Trim$(CStr(b))
+    If Not IsNum(b) Then xTitle = CellText(b)
     b = tws.Cells(tagR + 1, yC).Value
-    If Not IsNumeric(b) Then yTitle = Trim$(CStr(b))
+    If Not IsNum(b) Then yTitle = CellText(b)
 
     lastR = Application.Min(scope.Row + scope.Rows.Count - 1, ur.Row + ur.Rows.Count - 1)
     If lastR < tagR + 2 Then MsgBox "No data rows found below the tag.", vbExclamation: Exit Sub
@@ -97,11 +97,11 @@ Sub GenerateLineGraph()
     For r = tagR + 2 To lastR
         b = tws.Cells(r, xC).Value
         c = tws.Cells(r, yC).Value
-        If IsNumeric(b) And b <> "" And IsNumeric(c) And c <> "" Then
+        If IsNum(b) And IsNum(c) Then
             If Not inBlk Then
                 nBlk = nBlk + 1
                 blkRow(nBlk) = r
-                blkLab(nBlk) = Trim$(CStr(tws.Cells(r, nameC).Value))
+                blkLab(nBlk) = CellText(tws.Cells(r, nameC).Value)
                 rc(nBlk) = 0
                 inBlk = True
             End If
@@ -114,8 +114,8 @@ Sub GenerateLineGraph()
             If Not gotY Then minY = dv: maxY = dv: gotY = True
             If dv < minY Then minY = dv
             If dv > maxY Then maxY = dv
-            If IsNumeric(tws.Cells(r, e1C).Value) And tws.Cells(r, e1C).Value <> "" Then hasE1 = True
-            If IsNumeric(tws.Cells(r, e2C).Value) And tws.Cells(r, e2C).Value <> "" Then hasE2 = True
+            If IsNum(tws.Cells(r, e1C).Value) Then hasE1 = True
+            If IsNum(tws.Cells(r, e2C).Value) Then hasE2 = True
         Else
             inBlk = False
         End If
@@ -434,3 +434,18 @@ Private Sub NiceScale(ByVal raw As Double, ByRef axMax As Double, ByRef axStep A
     Next i
     axStep = e: axMax = e * (-Int(-raw / e))
 End Sub
+
+' True for a number (or numeric text); False for blank, text or an error
+' value such as #N/A, which would otherwise stop the macro on "<> """.
+Private Function IsNum(v As Variant) As Boolean
+    If IsError(v) Or IsEmpty(v) Then Exit Function
+    If VarType(v) = vbString Then
+        If Len(Trim$(v)) = 0 Then Exit Function
+    End If
+    IsNum = IsNumeric(v)
+End Function
+
+' Cell value as trimmed text; "" for an error value.
+Private Function CellText(v As Variant) As String
+    If Not IsError(v) Then CellText = Trim$(CStr(v))
+End Function
