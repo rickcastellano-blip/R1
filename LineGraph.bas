@@ -21,10 +21,10 @@ Private Const DO_LABELS     As Boolean = True    ' xgrapher: dolabels
 Private Const LABEL_FS      As Double = 10       ' point-label font size (pt, not scaled)
 ' settings cells on the Buttons sheet of this workbook
 Private Const SETTINGS_SHEET As String = "Buttons"
-Private Const LINE_CELL      As String = "J7"     ' 1 = connecting lines, 0 = markers only
-Private Const SCHEME_CELL    As String = "K7"     ' standard / stoplight / green->red
-Private Const MARKER_CELL    As String = "L7"     ' marker size in pt (2-72); blank = default
-Private Const LINEW_CELL     As String = "M7"     ' line + marker outline width in pt; blank = default
+Private Const LINE_CELL      As String = "G7"     ' 1 = connecting lines, 0 = markers only
+Private Const SCHEME_CELL    As String = "H7"     ' standard / stoplight / green->red
+Private Const MARKER_CELL    As String = "I7"     ' marker size in pt (2-72); blank = default
+Private Const LINEW_CELL     As String = "J7"     ' line + marker outline width in pt; blank = default
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range, f As Range
@@ -196,10 +196,10 @@ Sub GenerateLineGraph()
                 128 + ((clr(j) \ &H100&) And &HFF&) \ 2, _
                 128 + ((clr(j) \ &H10000) And &HFF&) \ 2)
             ' Excel ties the marker outline to the series line format, so the
-            ' Line Width setting (M7) sets both. With markers only (J7 = 0),
+            ' Line Width setting (J7) sets both. With markers only (G7 = 0),
             ' touching the line format switches a connecting line on, so it is
             ' switched off again and the marker colours re-applied: no line,
-            ' ever, when J7 is 0.
+            ' ever, when G7 is 0.
             If useLine Then
                 .Format.Line.Visible = msoTrue
                 .Format.Line.ForeColor.RGB = clr(j)
@@ -486,10 +486,10 @@ Private Function CellText(v As Variant) As String
     If Not IsError(v) Then CellText = Trim$(CStr(v))
 End Function
 
-' J7: 0 = markers only, anything else (1, blank) = connecting lines.
-' K7: "stoplight", "green->red" (anything starting "green"), else standard.
-' L7: marker size in points, 2-72; blank or text keeps the default size.
-' M7: width in points (0.25-10) of the connecting line and marker outline;
+' G7: 0 = markers only, anything else (1, blank) = connecting lines.
+' H7: "stoplight", "green->red" (anything starting "green"), else standard.
+' I7: marker size in points, 2-72; blank or text keeps the default size.
+' J7: width in points (0.25-10) of the connecting line and marker outline;
 '     blank or text keeps the defaults.
 ' Missing sheet or cells fall back to lines + standard + default size.
 Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef mSize As Double, _
