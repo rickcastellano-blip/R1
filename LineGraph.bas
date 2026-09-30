@@ -544,8 +544,7 @@ End Function
 ' then the X maximum (up to 2), one step at a time, and takes the first
 ' level where any layout is clear, so 1 and 2 columns are compared at the
 ' lowest axis bounds either needs. If no level clears a corner, the axes
-' are put back and the least-covering option is used. Measurements and
-' each layout's result are written to the Immediate window (Ctrl+G).
+' are put back and the least-covering option is used.
 Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal H As Double, _
                         ByVal n As Long, ByVal lineH As Double, ByVal msz As Double, _
                         ByVal fsTx As Double, ByVal useLine As Boolean, _
@@ -643,10 +642,6 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     padH = h1 - n * eH
     If padH > 8 Then padH = 8
     If padH < 4 Then padH = 4
-    Debug.Print "Legend measured: one column " & Format(w1, "0.0") & "x" & Format(h1, "0.0") & _
-                " pt, entry " & Format(eW, "0.0") & "x" & Format(eH, "0.0") & _
-                " pt; plot " & Format(pL, "0") & "," & Format(pT, "0") & " " & _
-                Format(pW, "0") & "x" & Format(pH, "0") & " pt; marker " & msz & " pt"
     kMax = n: If kMax > 2 Then kMax = 2          ' 1 or 2 columns
     xHi0 = ch.Axes(xlCategory).MaximumScale
     yHi0 = ch.Axes(xlValue).MaximumScale
@@ -654,7 +649,6 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     For iter = 0 To 5
         xLo = ch.Axes(xlCategory).MinimumScale: xHi = ch.Axes(xlCategory).MaximumScale
         yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
-        Debug.Print "Legend level " & iter & ": x " & xLo & ".." & xHi & ", y " & yLo & ".." & yHi
         bSc = 2147483647
         For k = 1 To kMax
             rws = -Int(-n / k)
@@ -668,9 +662,6 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                                       nS, sX1, sY1, sX2, sY2, xLo, xHi, yLo, yHi, _
                                       xLog, yLog, pL, pT, pW, pH)
                     sc = hits * 1000 + (k - 1) * 4 + corner
-                    Debug.Print "  " & k & " col " & Choose(corner + 1, "TR", "TL", "BR", "BL") & _
-                                ": box " & Format(lx, "0") & "," & Format(ly, "0") & " " & _
-                                Format(lw, "0") & "x" & Format(lh, "0") & " pt, covers " & hits
                     If sc < bSc Then
                         bSc = sc: bHits = hits: bK = k: bW = lw: bH = lh: bX = lx: bY = ly
                     End If
