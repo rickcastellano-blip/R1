@@ -357,6 +357,22 @@ Sub GenerateLineGraph()
     Next p
     ch.Legend.Left = LG_RIGHT * W - ch.Legend.Width
     ch.Legend.Top = LG_TOP * H
+    On Error GoTo 0
+
+    ' pick the corner / column count that covers no data, raising the axis
+    ' maxima if no corner is clear (falls back to top-right on any error)
+    PlaceLegend ch, tws, W, H, nBlk, fsL * LG_LINESP, msz, fsTx, useLine, xLog, yLog, _
+                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC
+
+    On Error Resume Next
+    For p = 1 To 2
+        With ch.PlotArea
+            .InsideLeft = PA_LEFT * W
+            .InsideTop = PA_TOP * H
+            .InsideWidth = PA_WIDTH * W
+            .InsideHeight = PA_HEIGHT * H
+        End With
+    Next p
     src.Select
     On Error GoTo 0
 
@@ -523,4 +539,190 @@ Private Function HsvToRgb(hue As Double, s As Double, v As Double) As Long
         Case Else:     r = 0: g = c: b = x
     End Select
     HsvToRgb = RGB(CInt((r + m) * 255), CInt((g + m) * 255), CInt((b + m) * 255))
+End Function
+
+'--- legend placement ---------------------------------------------------
+' Tries every corner (top-right, top-left, bottom-right, bottom-left) with
+' 1..3 legend columns and keeps the one that covers no markers, point
+' labels, error bars or connecting lines, preferring top-right and one
+' column. If none is clear it raises the Y maximum (up to 3 major steps),
+' then the X maximum (up to 2), to open space; if that never clears a
+' corner, the axes are put back and the least-covering option is used.
+Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal H As Double, _
+                        ByVal n As Long, ByVal lineH As Double, ByVal msz As Double, _
+                        ByVal fsTx As Double, ByVal useLine As Boolean, _
+                        ByVal xLog As Boolean, ByVal yLog As Boolean, _
+                        blkRow() As Long, rc() As Long, ByVal xC As Long, ByVal yC As Long, _
+                        ByVal eC As Long, lblC() As Long)
+    Dim oX() As Double, oY() As Double, oL() As Double, oT() As Double
+    Dim oR() As Double, oB() As Double, nO As Long
+    Dim sX1() As Double, sY1() As Double, sX2() As Double, sY2() As Double, nS As Long
+    Dim j As Long, r As Long, tot As Long, x As Variant, y As Variant, e As Variant
+    Dim txt As String, half As Double, hasPrev As Boolean, prevX As Double, prevY As Double
+    Dim pL As Double, pT As Double, pW As Double, pH As Double, insX As Double, insY As Double
+    Dim w1 As Double, xLo As Double, xHi As Double, yLo As Double, yHi As Double
+    Dim xHi0 As Double, yHi0 As Double, kMax As Long
+    Dim iter As Long, k As Long, corner As Long, rws As Long, hits As Long, sc As Long
+    Dim lw As Double, lh As Double, lx As Double, ly As Double
+    Dim bSc As Long, bHits As Long, bW As Double, bH As Double, bX As Double, bY As Double
+    Dim fSc As Long, fHits As Long, fW As Double, fH As Double, fX As Double, fY As Double
+
+    On Error GoTo Done
+
+    ' obstacles: point boxes (data anchor + point offsets) and line segments
+    For j = 1 To n: tot = tot + rc(j): Next j
+    If tot = 0 Then Exit Sub
+    ReDim oX(1 To 2 * tot): ReDim oY(1 To 2 * tot): ReDim oL(1 To 2 * tot)
+    ReDim oT(1 To 2 * tot): ReDim oR(1 To 2 * tot): ReDim oB(1 To 2 * tot)
+    ReDim sX1(1 To 2 * tot): ReDim sY1(1 To 2 * tot): ReDim sX2(1 To 2 * tot): ReDim sY2(1 To 2 * tot)
+    half = msz / 2 + 1
+    For j = 1 To n
+        hasPrev = False
+        For r = blkRow(j) To blkRow(j) + rc(j) - 1
+            x = tws.Cells(r, xC).Value: y = tws.Cells(r, yC).Value
+            If IsNum(x) And IsNum(y) Then
+                nO = nO + 1
+                oX(nO) = CDbl(x): oY(nO) = CDbl(y)
+                oL(nO) = -half: oR(nO) = half: oT(nO) = -half: oB(nO) = half
+                If DO_LABELS And lblC(j) > 0 Then
+                    txt = CellText(tws.Cells(r, lblC(j)).Value)
+                    If Len(txt) > 0 Then
+                        nO = nO + 1
+                        oX(nO) = CDbl(x): oY(nO) = CDbl(y)
+                        oL(nO) = half: oR(nO) = half + 4 + Len(txt) * fsTx * 0.55
+                        oT(nO) = -fsTx * 0.6: oB(nO) = fsTx * 0.6
+                    End If
+                End If
+                If eC > 0 And lblC(j) <> eC Then
+                    e = tws.Cells(r, eC).Value
+                    If IsNum(e) Then
+                        nS = nS + 1
+                        sX1(nS) = CDbl(x): sY1(nS) = CDbl(y) - Abs(CDbl(e))
+                        sX2(nS) = CDbl(x): sY2(nS) = CDbl(y) + Abs(CDbl(e))
+                    End If
+                End If
+                If useLine And hasPrev Then
+                    nS = nS + 1
+                    sX1(nS) = prevX: sY1(nS) = prevY: sX2(nS) = CDbl(x): sY2(nS) = CDbl(y)
+                End If
+                prevX = CDbl(x): prevY = CDbl(y): hasPrev = True
+            End If
+        Next r
+    Next j
+
+    pL = PA_LEFT * W: pT = PA_TOP * H: pW = PA_WIDTH * W: pH = PA_HEIGHT * H
+    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
+    insY = (LG_TOP - PA_TOP) * H
+    w1 = ch.Legend.Width                 ' one-column width, as laid out by Excel
+    kMax = n: If kMax > 3 Then kMax = 3
+    xHi0 = ch.Axes(xlCategory).MaximumScale
+    yHi0 = ch.Axes(xlValue).MaximumScale
+
+    For iter = 0 To 5
+        xLo = ch.Axes(xlCategory).MinimumScale: xHi = ch.Axes(xlCategory).MaximumScale
+        yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
+        bSc = 2147483647
+        For k = 1 To kMax
+            rws = -Int(-n / k)
+            lw = k * (w1 - 4) + 4 + 2 * (k - 1)
+            lh = rws * lineH + 4
+            If lw <= pW - 2 * insX And lh <= pH - 2 * insY Then
+                For corner = 0 To 3                  ' 0 TR, 1 TL, 2 BR, 3 BL
+                    If corner Mod 2 = 0 Then lx = pL + pW - insX - lw Else lx = pL + insX
+                    If corner < 2 Then ly = pT + insY Else ly = pT + pH - insY - lh
+                    hits = LegendHits(lx, ly, lw, lh, nO, oX, oY, oL, oT, oR, oB, _
+                                      nS, sX1, sY1, sX2, sY2, xLo, xHi, yLo, yHi, _
+                                      xLog, yLog, pL, pT, pW, pH)
+                    sc = hits * 1000 + (k - 1) * 4 + corner
+                    If sc < bSc Then
+                        bSc = sc: bHits = hits: bW = lw: bH = lh: bX = lx: bY = ly
+                    End If
+                Next corner
+            End If
+        Next k
+        If bSc = 2147483647 Then Exit Sub        ' legend too big for any layout
+        If iter = 0 Then fSc = bSc: fHits = bHits: fW = bW: fH = bH: fX = bX: fY = bY
+        If bHits = 0 Then Exit For
+
+        If iter < 3 Then                          ' room at the top first
+            With ch.Axes(xlValue)
+                If yLog Then .MaximumScale = yHi * 10 Else .MaximumScale = yHi + .MajorUnit
+            End With
+        ElseIf iter < 5 Then                      ' then room at the right
+            With ch.Axes(xlCategory)
+                If xLog Then .MaximumScale = xHi * 10 Else .MaximumScale = xHi + .MajorUnit
+            End With
+        End If
+    Next iter
+
+    If bHits > 0 And bHits >= fHits Then          ' bumping didn't help: undo it
+        ch.Axes(xlCategory).MaximumScale = xHi0
+        ch.Axes(xlValue).MaximumScale = yHi0
+        bW = fW: bH = fH: bX = fX: bY = fY
+    End If
+
+    With ch.Legend
+        .Width = bW
+        .Height = bH
+        .Left = bX
+        .Top = bY
+    End With
+Done:
+End Sub
+
+' Number of obstacles the legend box (plus a 2 pt margin) would cover.
+Private Function LegendHits(ByVal lx As Double, ByVal ly As Double, ByVal lw As Double, _
+                            ByVal lh As Double, ByVal nO As Long, oX() As Double, oY() As Double, _
+                            oL() As Double, oT() As Double, oR() As Double, oB() As Double, _
+                            ByVal nS As Long, sX1() As Double, sY1() As Double, _
+                            sX2() As Double, sY2() As Double, _
+                            ByVal xLo As Double, ByVal xHi As Double, _
+                            ByVal yLo As Double, ByVal yHi As Double, _
+                            ByVal xLog As Boolean, ByVal yLog As Boolean, _
+                            ByVal pL As Double, ByVal pT As Double, _
+                            ByVal pW As Double, ByVal pH As Double) As Long
+    Const PAD As Double = 2
+    Dim i As Long, m As Long, ax As Double, ay As Double, bx As Double, by As Double
+    Dim qx As Double, qy As Double, x0 As Double, x1 As Double, y0 As Double, y1 As Double
+
+    x0 = lx - PAD: x1 = lx + lw + PAD: y0 = ly - PAD: y1 = ly + lh + PAD
+    For i = 1 To nO
+        If MapV(oX(i), xLo, xHi, xLog, pL, pW, False, ax) And _
+           MapV(oY(i), yLo, yHi, yLog, pT, pH, True, ay) Then
+            If ax + oR(i) > x0 And ax + oL(i) < x1 And ay + oB(i) > y0 And ay + oT(i) < y1 Then
+                LegendHits = LegendHits + 1
+            End If
+        End If
+    Next i
+    For i = 1 To nS
+        If MapV(sX1(i), xLo, xHi, xLog, pL, pW, False, ax) And _
+           MapV(sY1(i), yLo, yHi, yLog, pT, pH, True, ay) And _
+           MapV(sX2(i), xLo, xHi, xLog, pL, pW, False, bx) And _
+           MapV(sY2(i), yLo, yHi, yLog, pT, pH, True, by) Then
+            For m = 0 To 20
+                qx = ax + (bx - ax) * m / 20: qy = ay + (by - ay) * m / 20
+                If qx > x0 And qx < x1 And qy > y0 And qy < y1 Then
+                    LegendHits = LegendHits + 1
+                    Exit For
+                End If
+            Next m
+        End If
+    Next i
+End Function
+
+' Data value -> chart position along one axis (flip for Y, which grows
+' downward on screen). False for values the axis can't show.
+Private Function MapV(ByVal v As Double, ByVal lo As Double, ByVal hi As Double, _
+                      ByVal isLog As Boolean, ByVal p0 As Double, ByVal span As Double, _
+                      ByVal flip As Boolean, ByRef outP As Double) As Boolean
+    Dim f As Double
+    If isLog Then
+        If v <= 0 Or lo <= 0 Or hi <= lo Then Exit Function
+        f = (Log(v) - Log(lo)) / (Log(hi) - Log(lo))
+    Else
+        If hi <= lo Then Exit Function
+        f = (v - lo) / (hi - lo)
+    End If
+    If flip Then outP = p0 + (1 - f) * span Else outP = p0 + f * span
+    MapV = True
 End Function
