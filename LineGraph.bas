@@ -19,6 +19,10 @@ Private Const LG_LINESP     As Double = 1.45
 Private Const TICK_OFFSET   As Long = 20
 Private Const DO_LABELS     As Boolean = True    ' xgrapher: dolabels
 Private Const MAT_FS_TEXT   As Double = 15       ' xgrapher: fs (point-label FontSize)
+' settings cells on the Buttons sheet of this workbook
+Private Const SETTINGS_SHEET As String = "Buttons"
+Private Const LINE_CELL      As String = "K6"     ' 1 = connecting lines, 0 = markers only
+Private Const SCHEME_CELL    As String = "K7"     ' standard / stoplight / green->red
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range, f As Range
@@ -35,13 +39,14 @@ Sub GenerateLineGraph()
     Dim minX As Double, maxX As Double, minY As Double, maxY As Double
     Dim gotX As Boolean, gotY As Boolean
     Dim dv As Double
-    Dim co As ChartObject, ch As Chart, cols As Variant, mks As Variant
+    Dim co As ChartObject, ch As Chart, mks As Variant
     Dim xRng As Range, yRng As Range, e1Rng As Range, e2Rng As Range
     Dim W As Double, H As Double, sc As Double
     Dim fsT As Double, fsA As Double, fsL As Double
     Dim wAX As Double, wPL As Double, msz As Double
     Dim axMax As Double, axStep As Double, axMin As Double
     Dim lblC() As Long, fsTx As Double
+    Dim useLine As Boolean, scheme As String, clr() As Long
 
     '--- 1. pick the range (you can switch workbooks in this dialog) --------
     On Error Resume Next
@@ -145,6 +150,10 @@ Sub GenerateLineGraph()
     wPL = Application.Max(0.25, Round(MAT_PLOTW * sc, 2))
     msz = Application.Min(72, Application.Max(2, Round(MAT_MS * sc * 0.5, 0)))
 
+    '--- 4b. line / colour settings from the Buttons sheet ----------------
+    ReadSettings useLine, scheme
+    clr = SeriesColors(scheme, nBlk)
+
     '--- 5. new chart (nothing existing is deleted) ------------------------
     Set co = tws.ChartObjects.Add( _
         Left:=tws.Cells(scope.Row, scope.Column + scope.Columns.Count).Left + 12, _
@@ -152,16 +161,11 @@ Sub GenerateLineGraph()
     co.Name = "LineGraph_" & Format$(Now, "yyyymmdd_hhmmss")
     co.Placement = xlFreeFloating
     Set ch = co.Chart
-    ch.ChartType = xlXYScatterLines
+    If useLine Then ch.ChartType = xlXYScatterLines Else ch.ChartType = xlXYScatter
     Do While ch.SeriesCollection.Count > 0
         ch.SeriesCollection(1).Delete
     Loop
 
-    ' xgrapher color1 palette
-    cols = Array(RGB(4, 65, 215), RGB(225, 0, 21), RGB(20, 20, 20), RGB(23, 105, 14), _
-                 RGB(5, 66, 105), RGB(140, 87, 5), RGB(115, 5, 5), RGB(50, 21, 79), _
-                 RGB(36, 186, 120), RGB(184, 93, 33), RGB(237, 143, 136), _
-                 RGB(224, 219, 110), RGB(157, 162, 248))
     ' xgrapher marker order 'o^sdv<>'
     mks = Array(xlMarkerStyleCircle, xlMarkerStyleTriangle, xlMarkerStyleSquare, _
                 xlMarkerStyleDiamond, xlMarkerStyleTriangle, xlMarkerStyleX, xlMarkerStyleStar)
@@ -182,22 +186,24 @@ Sub GenerateLineGraph()
             .Values = yRng
             .MarkerStyle = mks((j - 1) Mod 7)
             .MarkerSize = msz
-            .MarkerForegroundColor = cols((j - 1) Mod 13)
+            .MarkerForegroundColor = clr(j)
             ' MATLAB MarkerFaceColor = 0.5 + 0.5*color  (lightened fill)
             .MarkerBackgroundColor = RGB( _
-                128 + (cols((j - 1) Mod 13) And &HFF&) \ 2, _
-                128 + ((cols((j - 1) Mod 13) \ &H100&) And &HFF&) \ 2, _
-                128 + ((cols((j - 1) Mod 13) \ &H10000) And &HFF&) \ 2)
-            .Format.Line.Visible = msoTrue
-            .Format.Line.ForeColor.RGB = cols((j - 1) Mod 13)
-            .Format.Line.Weight = wPL
+                128 + (clr(j) And &HFF&) \ 2, _
+                128 + ((clr(j) \ &H100&) And &HFF&) \ 2, _
+                128 + ((clr(j) \ &H10000) And &HFF&) \ 2)
+            If useLine Then
+                .Format.Line.Visible = msoTrue
+                .Format.Line.ForeColor.RGB = clr(j)
+                .Format.Line.Weight = wPL
+            End If
             ' col 3 = +/- Y error, col 4 = +/- X error (xgrapher errorbar signature)
             If hasE1 And lblC(j) <> e1C Then
                 .ErrorBar Direction:=xlY, Include:=xlBoth, _
                           Type:=xlErrorBarTypeCustom, Amount:=e1Rng, MinusValues:=e1Rng
                 With .ErrorBars
                     .EndStyle = xlCap
-                    .Format.Line.ForeColor.RGB = cols((j - 1) Mod 13)
+                    .Format.Line.ForeColor.RGB = clr(j)
                     .Format.Line.Weight = wAX
                 End With
             End If
@@ -448,4 +454,73 @@ End Function
 ' Cell value as trimmed text; "" for an error value.
 Private Function CellText(v As Variant) As String
     If Not IsError(v) Then CellText = Trim$(CStr(v))
+End Function
+
+' K6: 0 = markers only, anything else (1, blank) = connecting lines.
+' K7: "stoplight", "green->red" (anything starting "green"), else standard.
+' Missing sheet or cells fall back to lines + standard.
+Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String)
+    Dim ws As Worksheet, v As Variant
+    useLine = True: scheme = "standard"
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Sub
+
+    v = ws.Range(LINE_CELL).Value
+    If IsNum(v) Then
+        If CDbl(v) = 0 Then useLine = False
+    End If
+
+    v = LCase$(CellText(ws.Range(SCHEME_CELL).Value))
+    If v = "stoplight" Then
+        scheme = "stoplight"
+    ElseIf Left$(v, 5) = "green" Then
+        scheme = "gradient"
+    End If
+End Sub
+
+' One colour per series (1..n).
+'   standard  - xgrapher color1 palette, repeating after 13
+'   stoplight - green, yellow, red, dark red, repeating after 4
+'   gradient  - hue slides from green (first series) to red (last) via yellow
+Private Function SeriesColors(scheme As String, n As Long) As Long()
+    Dim c() As Long, pal As Variant, i As Long, t As Double
+
+    If n < 1 Then n = 1
+    ReDim c(1 To n)
+    Select Case scheme
+        Case "stoplight"
+            pal = Array(RGB(0, 150, 0), RGB(230, 190, 0), RGB(220, 20, 20), RGB(128, 0, 0))
+        Case "gradient"
+            For i = 1 To n
+                If n > 1 Then t = (i - 1) / (n - 1) Else t = 0
+                c(i) = HsvToRgb(120# * (1# - t), 0.95, 0.85)
+            Next i
+            SeriesColors = c
+            Exit Function
+        Case Else
+            pal = Array(RGB(4, 65, 215), RGB(225, 0, 21), RGB(20, 20, 20), RGB(23, 105, 14), _
+                        RGB(5, 66, 105), RGB(140, 87, 5), RGB(115, 5, 5), RGB(50, 21, 79), _
+                        RGB(36, 186, 120), RGB(184, 93, 33), RGB(237, 143, 136), _
+                        RGB(224, 219, 110), RGB(157, 162, 248))
+    End Select
+    For i = 1 To n
+        c(i) = pal((i - 1) Mod (UBound(pal) + 1))
+    Next i
+    SeriesColors = c
+End Function
+
+' hue in degrees (0 = red, 60 = yellow, 120 = green), s and v in 0..1
+Private Function HsvToRgb(hue As Double, s As Double, v As Double) As Long
+    Dim c As Double, x As Double, m As Double, r As Double, g As Double, b As Double
+    c = v * s
+    x = c * (1 - Abs(((hue / 60#) - 2 * Int((hue / 60#) / 2)) - 1))
+    m = v - c
+    Select Case hue
+        Case Is < 60:  r = c: g = x: b = 0
+        Case Is < 120: r = x: g = c: b = 0
+        Case Else:     r = 0: g = c: b = x
+    End Select
+    HsvToRgb = RGB(CInt((r + m) * 255), CInt((g + m) * 255), CInt((b + m) * 255))
 End Function
