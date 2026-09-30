@@ -378,6 +378,8 @@ Sub GenerateLineGraph()
     ch.SetElement msoElementChartTitleNone
     On Error GoTo 0
     co.Width = W: co.Height = H
+    ch.Refresh                               ' draw the final layout before the message
+    DoEvents
 
     MsgBox "Chart created in '" & tws.Parent.Name & "' on '" & tws.Name & "'." & vbCrLf & _
            nBlk & " series, " & nPts & " points max.", vbInformation
@@ -616,6 +618,10 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     With ch.Legend
         .Position = xlLegendPositionRight
         .IncludeInLayout = False
+    End With
+    ch.Refresh                               ' let Excel lay the legend out now,
+    DoEvents                                 ' not after the macro ends
+    With ch.Legend
         w1 = .Width
         h1 = .Height
     End With
