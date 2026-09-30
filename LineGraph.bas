@@ -23,6 +23,7 @@ Private Const LABEL_FS      As Double = 10       ' point-label font size (pt, no
 Private Const SETTINGS_SHEET As String = "Buttons"
 Private Const LINE_CELL      As String = "J7"     ' 1 = connecting lines, 0 = markers only
 Private Const SCHEME_CELL    As String = "K7"     ' standard / stoplight / green->red
+Private Const MARKER_CELL    As String = "L7"     ' marker size in pt (2-72); blank = default
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range, f As Range
@@ -46,7 +47,7 @@ Sub GenerateLineGraph()
     Dim wAX As Double, wPL As Double, msz As Double
     Dim axMax As Double, axStep As Double, axMin As Double
     Dim lblC() As Long, fsTx As Double, legCorner As Long
-    Dim useLine As Boolean, scheme As String, clr() As Long
+    Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double
 
     '--- 1. pick the range (you can switch workbooks in this dialog) --------
     On Error Resume Next
@@ -151,7 +152,8 @@ Sub GenerateLineGraph()
     msz = Application.Min(72, Application.Max(2, Round(MAT_MS * sc * 0.5, 0)))
 
     '--- 4b. line / colour settings from the Buttons sheet ----------------
-    ReadSettings useLine, scheme
+    ReadSettings useLine, scheme, mSet
+    If mSet > 0 Then msz = mSet               ' Marker Size setting overrides the default
     clr = SeriesColors(scheme, nBlk)
 
     '--- 5. new chart (nothing existing is deleted) ------------------------
@@ -472,10 +474,11 @@ End Function
 
 ' J7: 0 = markers only, anything else (1, blank) = connecting lines.
 ' K7: "stoplight", "green->red" (anything starting "green"), else standard.
-' Missing sheet or cells fall back to lines + standard.
-Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String)
+' L7: marker size in points, 2-72; blank or text keeps the default size.
+' Missing sheet or cells fall back to lines + standard + default size.
+Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef mSize As Double)
     Dim ws As Worksheet, v As Variant
-    useLine = True: scheme = "standard"
+    useLine = True: scheme = "standard": mSize = 0
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
     On Error GoTo 0
@@ -491,6 +494,13 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String)
         scheme = "stoplight"
     ElseIf Left$(v, 5) = "green" Then
         scheme = "gradient"
+    End If
+
+    v = ws.Range(MARKER_CELL).Value
+    If IsNum(v) Then
+        mSize = Round(CDbl(v), 0)
+        If mSize < 2 Then mSize = 2
+        If mSize > 72 Then mSize = 72            ' Excel's marker size range
     End If
 End Sub
 
