@@ -3,11 +3,12 @@ Option Explicit
 '=========================== CONFIG ===========================
 Private Const GH_REPO    As String = "rickcastellano-blip/R1"
 Private Const GH_BRANCH  As String = "claude/tender-ramanujan-047vzz"
-' one button per macro: "module in this workbook=file in the repo"
-Private Const BAR_MAP    As String = "Module3=GenerateStrengthBarGraph.bas"
-Private Const LINE_MAP   As String = "Module4=GenerateLineGraph.bas"
-Private Const RCPT_MAP   As String = "Module1=RCPTImport.bas"
-Private Const RECOV_MAP  As String = "Module2=RCPTRecovered.bas"
+' one button per macro: "module in this workbook=file in the repo"; module
+' and file names match
+Private Const BAR_MAP    As String = "BarGraph=BarGraph.bas"
+Private Const LINE_MAP   As String = "LineGraph=LineGraph.bas"
+Private Const RCPT_MAP   As String = "RCPTImport=RCPTImport.bas"
+Private Const RECOV_MAP  As String = "RCPTRecovered=RCPTRecovered.bas"
 Private Const NT492_MAP  As String = "NTBuild492=NTBuild492.bas"
 '==============================================================
 
