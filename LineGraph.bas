@@ -45,7 +45,7 @@ Sub GenerateLineGraph()
     Dim fsT As Double, fsA As Double, fsL As Double
     Dim wAX As Double, wPL As Double, msz As Double
     Dim axMax As Double, axStep As Double, axMin As Double
-    Dim lblC() As Long, fsTx As Double
+    Dim lblC() As Long, fsTx As Double, legCorner As Long
     Dim useLine As Boolean, scheme As String, clr() As Long
 
     '--- 1. pick the range (you can switch workbooks in this dialog) --------
@@ -359,7 +359,7 @@ Sub GenerateLineGraph()
     ' pick the corner / column count that covers no data, raising the axis
     ' maxima if no corner is clear (falls back to top-right on any error)
     PlaceLegend ch, tws, W, H, nBlk, fsL * LG_LINESP, msz, fsTx, useLine, xLog, yLog, _
-                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC
+                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC, legCorner
 
     On Error Resume Next
     For p = 1 To 2
@@ -378,6 +378,7 @@ Sub GenerateLineGraph()
     ch.SetElement msoElementChartTitleNone
     On Error GoTo 0
     co.Width = W: co.Height = H
+    AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
     ch.Refresh                               ' draw the final layout now
 End Sub
 
@@ -550,7 +551,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                         ByVal fsTx As Double, ByVal useLine As Boolean, _
                         ByVal xLog As Boolean, ByVal yLog As Boolean, _
                         blkRow() As Long, rc() As Long, ByVal xC As Long, ByVal yC As Long, _
-                        ByVal eC As Long, lblC() As Long)
+                        ByVal eC As Long, lblC() As Long, ByRef legCorner As Long)
     Dim oX() As Double, oY() As Double, offL() As Double, offT() As Double
     Dim offR() As Double, offB() As Double, nO As Long
     Dim sX1() As Double, sY1() As Double, sX2() As Double, sY2() As Double, nS As Long
@@ -731,14 +732,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         .Top = bY
     End With
 
-    ' Excel may make the legend a little bigger than asked (a horizontal
-    ' legend especially), which would push it past the plot's right or
-    ' bottom edge; re-anchor it to its corner using the size it really has.
-    ch.Refresh
-    With ch.Legend
-        If bC Mod 2 = 0 Then .Left = pL + pW - insX - .Width     ' right corners
-        If bC >= 2 Then .Top = pT + pH - insY - .Height          ' bottom corners
-    End With
+    legCorner = bC                           ' final alignment: AnchorLegend
 Done:
 End Sub
 
@@ -828,4 +822,30 @@ Private Sub NiceRange(ByVal lo As Double, ByVal hi As Double, ByRef axMin As Dou
         Exit Sub
     End If
     axMin = Round(a, 12): axMax = Round(b, 12): axStep = Round(s, 12)
+End Sub
+
+' Align the legend to its corner of the plot box as finally drawn, using the
+' size Excel actually gave it (a horizontal legend can come out wider than
+' asked, which left it hanging past the plot's right edge).
+' corner: 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left.
+Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, ByVal H As Double)
+    Dim insX As Double, insY As Double
+    On Error Resume Next
+    ch.Refresh
+    DoEvents
+    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
+    insY = (LG_TOP - PA_TOP) * H
+    With ch.Legend
+        If corner Mod 2 = 0 Then
+            .Left = ch.PlotArea.InsideLeft + ch.PlotArea.InsideWidth - insX - .Width
+        Else
+            .Left = ch.PlotArea.InsideLeft + insX
+        End If
+        If corner < 2 Then
+            .Top = ch.PlotArea.InsideTop + insY
+        Else
+            .Top = ch.PlotArea.InsideTop + ch.PlotArea.InsideHeight - insY - .Height
+        End If
+    End With
+    ch.Refresh
 End Sub
