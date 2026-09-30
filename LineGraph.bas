@@ -563,6 +563,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     Dim xHi0 As Double, yHi0 As Double, kMax As Long
     Dim iter As Long, k As Long, corner As Long, rws As Long, hits As Long, sc As Long
     Dim lw As Double, lh As Double, lx As Double, ly As Double
+    Dim bK As Long, fK As Long
     Dim bSc As Long, bHits As Long, bW As Double, bH As Double, bX As Double, bY As Double
     Dim fSc As Long, fHits As Long, fW As Double, fH As Double, fX As Double, fY As Double
 
@@ -657,7 +658,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         bSc = 2147483647
         For k = 1 To kMax
             rws = -Int(-n / k)
-            lw = k * eW + padW + (k - 1) * 8     ' 8 pt between columns
+            lw = k * eW + padW + (k - 1) * 12    ' 12 pt between columns
             lh = rws * eH + padH + 1
             If lw <= pW - 2 * insX And lh <= pH - 2 * insY Then
                 For corner = 0 To 3                  ' 0 TR, 1 TL, 2 BR, 3 BL
@@ -671,13 +672,13 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                                 ": box " & Format(lx, "0") & "," & Format(ly, "0") & " " & _
                                 Format(lw, "0") & "x" & Format(lh, "0") & " pt, covers " & hits
                     If sc < bSc Then
-                        bSc = sc: bHits = hits: bW = lw: bH = lh: bX = lx: bY = ly
+                        bSc = sc: bHits = hits: bK = k: bW = lw: bH = lh: bX = lx: bY = ly
                     End If
                 Next corner
             End If
         Next k
         If bSc = 2147483647 Then Exit Sub        ' legend too big for any layout
-        If iter = 0 Then fSc = bSc: fHits = bHits: fW = bW: fH = bH: fX = bX: fY = bY
+        If iter = 0 Then fSc = bSc: fHits = bHits: fK = bK: fW = bW: fH = bH: fX = bX: fY = bY
         If bHits = 0 Then Exit For
 
         If iter < 3 Then                          ' room at the top first
@@ -694,9 +695,17 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     If bHits > 0 And bHits >= fHits Then          ' bumping didn't help: undo it
         ch.Axes(xlCategory).MaximumScale = xHi0
         ch.Axes(xlValue).MaximumScale = yHi0
-        bW = fW: bH = fH: bX = fX: bY = fY
+        bK = fK: bW = fW: bH = fH: bX = fX: bY = fY
     End If
 
+    ' A side legend keeps one column however wide it is; entries only wrap
+    ' into rows (row-major: A B / C D) when the legend is laid out
+    ' horizontally, so a 2-column choice is switched to top layout first.
+    If bK > 1 Then
+        ch.Legend.Position = xlLegendPositionTop
+        ch.Legend.IncludeInLayout = False
+        ch.Refresh
+    End If
     With ch.Legend
         .Width = bW
         .Height = bH
