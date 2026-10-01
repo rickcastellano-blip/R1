@@ -27,7 +27,59 @@ Private Const MARKER_CELL    As String = "I7"     ' marker size in pt (2-72); bl
 Private Const LINEW_CELL     As String = "J7"     ' line + marker outline width in pt; blank = default
 ' =========================================================
 Sub GenerateLineGraph()
-    Dim src As Range, tws As Worksheet, scope As Range, ur As Range, f As Range
+    Dim src As Range, tws As Worksheet, scope As Range, ur As Range
+    Dim cel As Range, tags As Collection, i As Long, nextTop As Double
+
+    '--- 1. pick the range (you can switch workbooks in this dialog) --------
+    On Error Resume Next
+    Set src = Application.InputBox( _
+        Prompt:="Switch to the workbook you want, then select/drag the data block." & vbCrLf & _
+                "The selection must include the 'graph' tag cell (one chart per tag).", _
+        Title:="Generate Line Graph", Type:=8)
+    On Error GoTo 0
+    If src Is Nothing Then Exit Sub
+    Set tws = src.Worksheet
+    Set ur = tws.UsedRange
+    Set scope = Application.Intersect(src, ur)
+    If scope Is Nothing Then MsgBox "That selection contains no data.", vbExclamation: Exit Sub
+
+    '--- 2. every graph tag in the selection makes its own chart (xgrapher) --
+    Set tags = New Collection
+    For Each cel In scope.Cells
+        If IsTag(cel.Value) Then tags.Add cel
+    Next cel
+    If tags.Count = 0 Then
+        MsgBox "Could not find a cell containing 'graph' inside the selection.", vbExclamation
+        Exit Sub
+    End If
+    For i = 1 To tags.Count
+        BuildLineGraph src, tws, scope, ur, tags(i), i, nextTop
+    Next i
+End Sub
+
+' Empty cell, or a formula showing "" (not an error value such as #N/A).
+Private Function IsBlankValue(v As Variant) As Boolean
+    If IsEmpty(v) Then
+        IsBlankValue = True
+    ElseIf VarType(v) = vbString Then
+        IsBlankValue = (Len(Trim$(v)) = 0)
+    End If
+End Function
+
+' "graph", "graph linlog", "graph loglin" or "graph loglog" (any case)
+Private Function IsTag(v As Variant) As Boolean
+    Dim t As String
+    If VarType(v) <> vbString Then Exit Function
+    t = LCase$(Trim$(v))
+    IsTag = (t = "graph" Or t = "graph linlog" Or t = "graph loglin" Or t = "graph loglog")
+End Function
+
+' One chart for the tag in cell f. Its data runs down from the tag and ends
+' at two blank rows in the X/Y columns, the next graph tag in the X column,
+' or the end of the selection (xgrapher). Charts go to the right of the
+' selection at the tag's row, below the previous chart if they'd overlap.
+Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As Range, _
+                           ByVal f As Range, ByVal gIdx As Long, ByRef nextTop As Double)
     Dim tagR As Long, tagC As Long
     Dim xC As Long, yC As Long, e1C As Long, e2C As Long, nameC As Long
     Dim r As Long, j As Long, lastR As Long, p As Long
@@ -50,32 +102,8 @@ Sub GenerateLineGraph()
     Dim lblC() As Long, fsTx As Double, legCorner As Long
     Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
 
-    '--- 1. pick the range (you can switch workbooks in this dialog) --------
-    On Error Resume Next
-    Set src = Application.InputBox( _
-        Prompt:="Switch to the workbook you want, then select/drag the data block." & vbCrLf & _
-                "The selection must include the 'graph' tag cell.", _
-        Title:="Generate Line Graph", Type:=8)
-    On Error GoTo 0
-    If src Is Nothing Then Exit Sub
-    Set tws = src.Worksheet
-    Set ur = tws.UsedRange
-    Set scope = Application.Intersect(src, ur)
-    If scope Is Nothing Then MsgBox "That selection contains no data.", vbExclamation: Exit Sub
+    Dim nBlank As Long
 
-    '--- 2. orient on the tag ----------------------------------------------
-    Set f = scope.Find(What:="graph*", LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
-    Do While Not f Is Nothing
-        tag = LCase$(Trim$(CStr(f.Value)))
-        If tag = "graph" Or tag = "graph linlog" Or tag = "graph loglin" Or tag = "graph loglog" Then Exit Do
-        Set f = scope.FindNext(f)
-        If f Is Nothing Then Exit Do
-        If f.Row = tagR And f.Column = tagC Then Exit Do
-    Loop
-    If f Is Nothing Then
-        MsgBox "Could not find a cell containing 'graph' inside the selection.", vbExclamation
-        Exit Sub
-    End If
     tagR = f.Row: tagC = f.Column
     tag = LCase$(Trim$(CStr(f.Value)))
     If Len(tag) = 12 Then
@@ -104,7 +132,9 @@ Sub GenerateLineGraph()
     For r = tagR + 2 To lastR
         b = tws.Cells(r, xC).Value
         c = tws.Cells(r, yC).Value
+        If IsTag(b) Then Exit For                    ' the next graph starts here
         If IsNum(b) And IsNum(c) Then
+            nBlank = 0
             If Not inBlk Then
                 nBlk = nBlk + 1
                 blkRow(nBlk) = r
@@ -125,9 +155,16 @@ Sub GenerateLineGraph()
             If IsNum(tws.Cells(r, e2C).Value) Then hasE2 = True
         Else
             inBlk = False
+            If IsBlankValue(b) And IsBlankValue(c) Then
+                nBlank = nBlank + 1
+                If nBlank >= 2 Then Exit For         ' two blank rows end the graph
+            Else
+                nBlank = 0
+            End If
         End If
     Next r
-    If nBlk = 0 Then MsgBox "No numeric X/Y pairs found below the tag.", vbExclamation: Exit Sub
+    If nBlk = 0 Then MsgBox "No numeric X/Y pairs found below the tag in " & _
+                            f.Address(False, False) & ".", vbExclamation: Exit Sub
     For j = 1 To nBlk
         If rc(j) > nPts Then nPts = rc(j)
         ' text labels sit in the first non-numeric column after X,Y (xgrapher:
@@ -166,8 +203,9 @@ Sub GenerateLineGraph()
     '--- 5. new chart (nothing existing is deleted) ------------------------
     Set co = tws.ChartObjects.Add( _
         Left:=tws.Cells(scope.Row, scope.Column + scope.Columns.Count).Left + 12, _
-        Top:=tws.Cells(scope.Row, 1).Top, Width:=W, Height:=H)
-    co.Name = "LineGraph_" & Format$(Now, "yyyymmdd_hhmmss")
+        Top:=Application.Max(tws.Cells(tagR, 1).Top, nextTop), Width:=W, Height:=H)
+    nextTop = co.Top + H + 12
+    co.Name = "LineGraph_" & Format$(Now, "yyyymmdd_hhmmss") & "_" & gIdx
     co.Placement = xlFreeFloating
     Set ch = co.Chart
     If useLine Then ch.ChartType = xlXYScatterLines Else ch.ChartType = xlXYScatter
