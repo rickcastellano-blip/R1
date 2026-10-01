@@ -131,37 +131,37 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     ReDim rc(1 To lastR - tagR + 2)
     ReDim lblC(1 To lastR - tagR + 2)
     inBlk = False
+    ' A series runs until a row where X and Y are BOTH blank; a row with only
+    ' one value (or #N/A) stays in the series and simply has no point. Each
+    ' series range spans its first to last row with both values numeric.
     For r = tagR + 2 To lastR
         b = tws.Cells(r, xC).Value
         c = tws.Cells(r, yC).Value
         If IsTag(b) Then Exit For                    ' the next graph starts here
-        If IsNum(b) And IsNum(c) Then
-            nBlank = 0
-            If Not inBlk Then
-                nBlk = nBlk + 1
-                blkRow(nBlk) = r
-                blkLab(nBlk) = CellText(tws.Cells(r, nameC).Value)
-                rc(nBlk) = 0
-                inBlk = True
-            End If
-            rc(nBlk) = rc(nBlk) + 1
-            dv = CDbl(b)
-            If Not gotX Then minX = dv: maxX = dv: gotX = True
-            If dv < minX Then minX = dv
-            If dv > maxX Then maxX = dv
-            dv = CDbl(c)
-            If Not gotY Then minY = dv: maxY = dv: gotY = True
-            If dv < minY Then minY = dv
-            If dv > maxY Then maxY = dv
-            If IsNum(tws.Cells(r, e1C).Value) Then hasE1 = True
-            If IsNum(tws.Cells(r, e2C).Value) Then hasE2 = True
+        If IsBlankValue(b) And IsBlankValue(c) Then
+            inBlk = False                            ' X and Y both blank: new series
+            nBlank = nBlank + 1
+            If nBlank >= 2 Then Exit For             ' two blank rows end the graph
         Else
-            inBlk = False
-            If IsBlankValue(b) And IsBlankValue(c) Then
-                nBlank = nBlank + 1
-                If nBlank >= 2 Then Exit For         ' two blank rows end the graph
-            Else
-                nBlank = 0
+            nBlank = 0
+            If IsNum(b) And IsNum(c) Then
+                If Not inBlk Then
+                    nBlk = nBlk + 1
+                    blkRow(nBlk) = r
+                    blkLab(nBlk) = CellText(tws.Cells(r, nameC).Value)
+                    inBlk = True
+                End If
+                rc(nBlk) = r - blkRow(nBlk) + 1      ' through this row
+                dv = CDbl(b)
+                If Not gotX Then minX = dv: maxX = dv: gotX = True
+                If dv < minX Then minX = dv
+                If dv > maxX Then maxX = dv
+                dv = CDbl(c)
+                If Not gotY Then minY = dv: maxY = dv: gotY = True
+                If dv < minY Then minY = dv
+                If dv > maxY Then maxY = dv
+                If IsNum(tws.Cells(r, e1C).Value) Then hasE1 = True
+                If IsNum(tws.Cells(r, e2C).Value) Then hasE2 = True
             End If
         End If
     Next r
@@ -211,6 +211,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     co.Placement = xlFreeFloating
     Set ch = co.Chart
     If useLine Then ch.ChartType = xlXYScatterLines Else ch.ChartType = xlXYScatter
+    ch.DisplayBlanksAs = xlNotPlotted            ' a blank cell is no point, not zero
     Do While ch.SeriesCollection.Count > 0
         ch.SeriesCollection(1).Delete
     Loop
