@@ -492,6 +492,17 @@ Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double)
         .Font.Color = RGB(0, 0, 0)
     End With
 
+    ' Leader lines (Excel 2013+): a label dragged away from its point keeps a
+    ' thin black line back to it
+    On Error Resume Next
+    ser.HasLeaderLines = True
+    With ser.LeaderLines.Format.Line
+        .Visible = msoTrue
+        .ForeColor.RGB = RGB(0, 0, 0)
+        .Weight = 0.75
+    End With
+    On Error GoTo 0
+
     ' error cells get no label (xgrapher skips "ActiveX VT_ERROR:"); on older
     ' Excel, copy each cell's text in as a static label instead
     For i = 1 To Application.Min(lblRng.Rows.Count, ser.Points.Count)
