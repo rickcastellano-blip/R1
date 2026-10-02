@@ -7,6 +7,8 @@ Private Const TEST_SECONDS  As Double = 21600#   ' 6 hours
 Private Const V_THRESHOLD   As Double = 30#      ' voltage-on detection
 Private Const H_OFFSET_SEC  As Double = 30#      ' initial-current sample point
 Private Const TAIL_POINTS   As Long = 10         ' samples averaged to extrapolate a short log
+Private Const OFF_GAP_SEC   As Double = 60#      ' voltage off this long ends a run; a file can
+                                                 ' hold several runs, one row each
 Private Const WRITE_FORMULAS       As Boolean = True
 Private Const WRITE_AREA_RATIO     As Boolean = True
 Private Const DEFAULT_AREA_RATIO   As Double = 1#
@@ -25,91 +27,112 @@ Public Sub AddRCPTRunFromCSV()
     Dim ws As Worksheet, r As Long
     Dim tArr() As Double, aArr() As Double, nPts As Long
     Dim isPartial As Boolean, availHrs As Double, estQ As Double, cls As String
+    Dim startAfter As Double, runEnd As Double, nRuns As Long, summary As String
 
     path = PickCSVFile()
     If Len(path) = 0 Then Exit Sub
 
     On Error GoTo Cleanup
     Application.ScreenUpdating = False
-    Application.StatusBar = "Reading " & Dir(path) & " ..."
-
-    msg = ParseRCPT(path, dTest, hA, i6A, charge, onHours, nUsed, tArr, aArr, nPts, _
-                    isPartial, availHrs)
-    If Len(msg) > 0 Then
-        Application.StatusBar = False
-        Application.ScreenUpdating = True
-        MsgBox msg, vbExclamation, "Add RCPT Run"
-        Exit Sub
-    End If
-
-    ' --- short log: add it flagged as partial --------------------------
-    If isPartial Then
-        estQ = charge + i6A * (TEST_SECONDS - availHrs * 3600#)
-        cls = RCPTClass(estQ)
-    Else
-        estQ = charge
-        cls = RCPTClass(charge)
-    End If
-
     sample = SampleFromFileName(path)
     Set ws = ThisWorkbook.Worksheets(SHEET_NAME)
 
-    r = FirstEmptyRow(ws)
+    ' one row per run: each pass reads the file from the end of the last run
+    startAfter = -1
+    Do
+        Application.StatusBar = "Reading " & Dir(path) & " (run " & nRuns + 1 & ") ..."
+        msg = ParseRCPT(path, startAfter, dTest, hA, i6A, charge, onHours, nUsed, tArr, aArr, nPts, _
+                        isPartial, availHrs, runEnd)
+        If Len(msg) > 0 Then
+            If nRuns = 0 Then
+                Application.StatusBar = False
+                Application.ScreenUpdating = True
+                MsgBox msg, vbExclamation, "Add RCPT Run"
+                Exit Sub
+            End If
+            ' no further run in the file (or a fragment too short to use)
+            If InStr(1, msg, "No sample above", vbTextCompare) <> 1 Then
+                summary = summary & vbCrLf & "Run " & nRuns + 1 & " skipped: " & msg & vbCrLf
+            End If
+            If InStr(1, msg, "No sample above", vbTextCompare) = 1 Or runEnd <= startAfter Then Exit Do
+            startAfter = runEnd
+        Else
+            nRuns = nRuns + 1
 
-    ws.Cells(r, 1).Value = dTest
-    ws.Cells(r, 2).Value = sample
-    ws.Cells(r, 8).Value = Round(hA * 1000#, 0)
-    ws.Cells(r, 9).Value = i6A / hA
-    ws.Cells(r, 12).Value = Round(estQ, 0)
-    ws.Cells(r, 14).Value = cls
-    ws.Cells(r, 16).Value = onHours
+            ' --- short log: add it flagged as partial ----------------------
+            If isPartial Then
+                estQ = charge + i6A * (TEST_SECONDS - availHrs * 3600#)
+                cls = RCPTClass(estQ)
+            Else
+                estQ = charge
+                cls = RCPTClass(charge)
+            End If
 
-    If WRITE_AREA_RATIO Then
-        If Len(ws.Cells(r, 7).Value) = 0 Then ws.Cells(r, 7).Value = DEFAULT_AREA_RATIO
-    End If
+            r = FirstEmptyRow(ws)
 
-    If WRITE_FORMULAS Then
-        ws.Cells(r, 10).Formula = "=H" & r & "/1000*60*60*6*(I" & r & "+1)/2*G" & r
-        ws.Cells(r, 13).Formula = "=L" & r & "*G" & r
-        ws.Cells(r, 15).Formula = "=M" & r
-    End If
+            ws.Cells(r, 1).Value = dTest
+            ws.Cells(r, 2).Value = sample
+            ws.Cells(r, 8).Value = Round(hA * 1000#, 0)
+            ws.Cells(r, 9).Value = i6A / hA
+            ws.Cells(r, 12).Value = Round(estQ, 0)
+            ws.Cells(r, 14).Value = cls
+            ws.Cells(r, 16).Value = onHours
 
-    ws.Cells(r, 1).NumberFormat = "m/d/yyyy"
-    ws.Cells(r, 8).NumberFormat = "0"
-    ws.Cells(r, 9).NumberFormat = "0.000"
-    ws.Range(ws.Cells(r, 10), ws.Cells(r, 13)).NumberFormat = "0"
-    ws.Cells(r, 15).NumberFormat = "0"
-    ws.Cells(r, 16).NumberFormat = "0.00"
-    ws.Range(ws.Cells(r, 10), ws.Cells(r, 13)).HorizontalAlignment = xlCenter
-    ws.Cells(r, 16).HorizontalAlignment = xlCenter
+            If WRITE_AREA_RATIO Then
+                If Len(ws.Cells(r, 7).Value) = 0 Then ws.Cells(r, 7).Value = DEFAULT_AREA_RATIO
+            End If
 
-    If isPartial Then
-        ws.Range(ws.Cells(r, 1), ws.Cells(r, LAST_COL)).Interior.Color = PARTIAL_FILL
-        ws.Cells(r, 12).ClearComments
-        ws.Cells(r, 12).AddComment "Partial log: measured over " & Format(availHrs, "0.00") & _
-            " h only." & vbLf & "Measured charge: " & Format(charge, "#,##0") & " C" & vbLf & _
-            "Value shown is extrapolated to 6 h, holding the mean of the last " & _
-            TAIL_POINTS & " samples constant." & vbLf & _
-            "Increase factor (col I) uses that same mean."
-    End If
+            If WRITE_FORMULAS Then
+                ws.Cells(r, 10).Formula = "=H" & r & "/1000*60*60*6*(I" & r & "+1)/2*G" & r
+                ws.Cells(r, 13).Formula = "=L" & r & "*G" & r
+                ws.Cells(r, 15).Formula = "=M" & r
+            End If
 
-    If nPts > 0 Then
-        AddCurrentChart ws, r, sample, estQ, tArr, aArr
-    End If
+            ws.Cells(r, 1).NumberFormat = "m/d/yyyy"
+            ws.Cells(r, 8).NumberFormat = "0"
+            ws.Cells(r, 9).NumberFormat = "0.000"
+            ws.Range(ws.Cells(r, 10), ws.Cells(r, 13)).NumberFormat = "0"
+            ws.Cells(r, 15).NumberFormat = "0"
+            ws.Cells(r, 16).NumberFormat = "0.00"
+            ws.Range(ws.Cells(r, 10), ws.Cells(r, 13)).HorizontalAlignment = xlCenter
+            ws.Cells(r, 16).HorizontalAlignment = xlCenter
+
+            If isPartial Then
+                ws.Range(ws.Cells(r, 1), ws.Cells(r, LAST_COL)).Interior.Color = PARTIAL_FILL
+                ws.Cells(r, 12).ClearComments
+                ws.Cells(r, 12).AddComment "Partial log: measured over " & Format(availHrs, "0.00") & _
+                    " h only." & vbLf & "Measured charge: " & Format(charge, "#,##0") & " C" & vbLf & _
+                    "Value shown is extrapolated to 6 h, holding the mean of the last " & _
+                    TAIL_POINTS & " samples constant." & vbLf & _
+                    "Increase factor (col I) uses that same mean."
+            End If
+
+            If nPts > 0 Then
+                AddCurrentChart ws, r, sample, estQ, tArr, aArr
+            End If
+
+            summary = summary & IIf(nRuns > 1, vbCrLf, "") & _
+                   "Run " & nRuns & ": row " & r & vbCrLf & _
+                   IIf(isPartial, "*** PARTIAL: only " & Format(availHrs, "0.00") & " h of data ***" & vbCrLf, "") & _
+                   "Test date:        " & Format(dTest, "m/d/yyyy") & vbCrLf & _
+                   "Initial current:  " & Format(hA * 1000#, "0") & " mA  (at " & H_OFFSET_SEC & " s)" & vbCrLf & _
+                   "Increase factor:  " & Format(i6A / hA, "0.000") & vbCrLf & _
+                   "Integral (" & IIf(isPartial, Format(availHrs, "0.00"), "6") & " h):   " & Format(charge, "#,##0") & " C" & vbCrLf & _
+                   IIf(isPartial, "Est. 6 h integral: " & Format(estQ, "#,##0") & " C" & vbCrLf, "") & _
+                   "Classification:   " & cls & vbCrLf & _
+                   "Voltage duration: " & Format(onHours, "0.00") & " hr" & vbCrLf & _
+                   "Samples used:     " & Format(nUsed, "#,##0") & vbCrLf
+
+            If runEnd <= startAfter Then Exit Do
+            startAfter = runEnd
+        End If
+    Loop
 
     Application.StatusBar = False
     Application.ScreenUpdating = True
 
-    MsgBox "Added row " & r & " for sample " & sample & "." & vbCrLf & vbCrLf & _
-           IIf(isPartial, "*** PARTIAL: only " & Format(availHrs, "0.00") & " h of data ***" & vbCrLf, "") & _
-           "Test date:        " & Format(dTest, "m/d/yyyy") & vbCrLf & _
-           "Initial current:  " & Format(hA * 1000#, "0") & " mA  (at " & H_OFFSET_SEC & " s)" & vbCrLf & _
-           "Increase factor:  " & Format(i6A / hA, "0.000") & vbCrLf & _
-           "Integral (" & IIf(isPartial, Format(availHrs, "0.00"), "6") & " h):   " & Format(charge, "#,##0") & " C" & vbCrLf & _
-           IIf(isPartial, "Est. 6 h integral: " & Format(estQ, "#,##0") & " C" & vbCrLf, "") & _
-           "Classification:   " & cls & vbCrLf & _
-           "Voltage duration: " & Format(onHours, "0.00") & " hr" & vbCrLf & _
-           "Samples used:     " & Format(nUsed, "#,##0"), vbInformation, "Done"
+    MsgBox "Sample " & sample & ": " & nRuns & IIf(nRuns = 1, " run", " runs") & " added." & _
+           vbCrLf & vbCrLf & summary, vbInformation, "Done"
     Exit Sub
 
 Cleanup:
@@ -119,12 +142,16 @@ Cleanup:
 End Sub
 
 '====================== CSV parse + math ======================
-Private Function ParseRCPT(path As String, ByRef dTest As Date, _
+' Parses the first run that starts after startAfter (seconds; -1 = from the
+' top). The run ends once the voltage has been off for OFF_GAP_SEC; runEnd
+' returns where to look for the next run.
+Private Function ParseRCPT(path As String, ByVal startAfter As Double, ByRef dTest As Date, _
                            ByRef hA As Double, ByRef i6A As Double, _
                            ByRef charge As Double, ByRef onHours As Double, _
                            ByRef nUsed As Long, ByRef tArr() As Double, _
                            ByRef aArr() As Double, ByRef nPts As Long, _
-                           ByRef isPartial As Boolean, ByRef availHrs As Double) As String
+                           ByRef isPartial As Boolean, ByRef availHrs As Double, _
+                           ByRef runEnd As Double) As String
     Dim ff As Integer, txt As String, lines() As String
     Dim i As Long, ln As String
     Dim f() As String, hdrMsg As String
@@ -133,7 +160,7 @@ Private Function ParseRCPT(path As String, ByRef dTest As Date, _
     Dim t0 As Double, s As Double, prevS As Double, prevA As Double
     Dim prevT As Double, prevV As Double, onSec As Double
     Dim found0 As Boolean, hFound As Boolean, endFound As Boolean
-    Dim havePrev As Boolean
+    Dim havePrev As Boolean, offStart As Double
     Dim cap As Long
 
     On Error GoTo Fail
@@ -153,6 +180,7 @@ Private Function ParseRCPT(path As String, ByRef dTest As Date, _
     nPts = 0
     isPartial = False
     availHrs = 0
+    hA = 0: i6A = 0: runEnd = startAfter
     cap = 1024
     ReDim tArr(1 To cap)
     ReDim aArr(1 To cap)
@@ -178,6 +206,20 @@ Private Function ParseRCPT(path As String, ByRef dTest As Date, _
                 v = Val(f(vCol))
                 a = Val(f(aCol))
                 tsec = StampToSeconds(f(tCol))
+                If tsec <= startAfter Then GoTo NextLine     ' belongs to an earlier run
+                runEnd = tsec
+
+                ' end of this run: voltage off for OFF_GAP_SEC
+                If found0 Then
+                    If v > V_THRESHOLD Then
+                        offStart = 0
+                    ElseIf offStart = 0 Then
+                        offStart = tsec
+                    ElseIf tsec - offStart >= OFF_GAP_SEC Then
+                        runEnd = offStart
+                        Exit For
+                    End If
+                End If
 
                 If havePrev Then
                     If v > V_THRESHOLD And prevV > V_THRESHOLD Then
@@ -200,19 +242,25 @@ Private Function ParseRCPT(path As String, ByRef dTest As Date, _
                 Else
                     s = tsec - t0
                     If s <= TEST_SECONDS Then
-                        charge = charge + (prevA + a) / 2# * (s - prevS)
-                        prevS = s
-                        prevA = a
-                        nUsed = nUsed + 1
-                        AddPoint tArr, aArr, nPts, cap, s / 3600#, a
-                        If Not hFound Then
-                            If s >= H_OFFSET_SEC Then
-                                hA = a
-                                hFound = True
+                        ' only voltage-on readings count, so a run that stops
+                        ' early isn't diluted by the switched-off tail
+                        If v > V_THRESHOLD Then
+                            charge = charge + (prevA + a) / 2# * (s - prevS)
+                            prevS = s
+                            prevA = a
+                            nUsed = nUsed + 1
+                            AddPoint tArr, aArr, nPts, cap, s / 3600#, a
+                            If Not hFound Then
+                                If s >= H_OFFSET_SEC Then
+                                    hA = a
+                                    hFound = True
+                                End If
                             End If
                         End If
                     ElseIf Not endFound Then
-                        i6A = a
+                        ' current at 6 h; if the supply already switched off
+                        ' (a timed 6 h run), the last reading within 6 h
+                        If v > V_THRESHOLD Then i6A = a Else i6A = prevA
                         endFound = True
                     End If
                 End If
