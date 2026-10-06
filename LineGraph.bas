@@ -879,9 +879,36 @@ Outside:
     With ch.Legend
         .Position = xlLegendPositionRight
         .IncludeInLayout = False
+        .Left = pL + pW + 18                  ' beside the plot before sizing it
+        .Top = pT
         .Width = lw
         .Height = lh
     End With
+
+    ' Excel may still give the legend less width than asked and wrap long
+    ' names (a wrapped entry is taller than the rest): widen and re-check
+    Dim try As Long, eMin As Double, eMax As Double, eh As Double
+    For try = 1 To 4
+        ch.Refresh
+        DoEvents
+        eMin = 0: eMax = 0
+        On Error Resume Next
+        For j = 1 To ch.Legend.LegendEntries.Count
+            eh = ch.Legend.LegendEntries(j).Height
+            If eMin = 0 Or eh < eMin Then eMin = eh
+            If eh > eMax Then eMax = eh
+        Next j
+        On Error GoTo Done
+        If eMin <= 0 Or eMax < eMin * 1.5 Then Exit For   ' nothing wrapped
+        lw = lw * 1.15
+        extraW = lw + 24
+        ch.Parent.Width = W + extraW
+        With ch.Legend
+            .Left = pL + pW + 18
+            .Width = lw
+            .Height = lh
+        End With
+    Next try
     legCorner = 4
 Done:
 End Sub
