@@ -862,16 +862,26 @@ Outside:
         nm = ch.SeriesCollection(j).Name
         If Len(nm) > maxLen Then maxLen = Len(nm)
     Next j
-    lw = 30 + maxLen * fs * 0.55
-    lh = n * fs * 1.25 + 8
+    lw = 30 + maxLen * fs * 0.52
+    lh = n * fs * LG_LINESP + 12              ' a full line per entry, plus box padding
+    extraW = lw + 24
+    If pT + lh + 8 > H Then extraH = pT + lh + 8 - H
+
+    ' widen the chart FIRST: Excel caps a legend's width to the chart it is
+    ' in, which wrapped long names and left the widened chart half empty
+    ch.Parent.Width = W + extraW
+    ch.Parent.Height = H + extraH
+    For j = 1 To 2
+        With ch.PlotArea
+            .InsideLeft = pL: .InsideTop = pT: .InsideWidth = pW: .InsideHeight = pH
+        End With
+    Next j
     With ch.Legend
         .Position = xlLegendPositionRight
         .IncludeInLayout = False
         .Width = lw
         .Height = lh
     End With
-    extraW = lw + 24
-    If pT + lh + 8 > H Then extraH = pT + lh + 8 - H
     legCorner = 4
 Done:
 End Sub
