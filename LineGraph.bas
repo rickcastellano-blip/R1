@@ -101,7 +101,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim fsT As Double, fsA As Double, fsL As Double
     Dim wAX As Double, wPL As Double, msz As Double
     Dim axMax As Double, axStep As Double, axMin As Double
-    Dim lblC() As Long, fsTx As Double, legCorner As Long
+    Dim lblC() As Long, fsTx As Double, legCorner As Long, legExtraW As Double, legExtraH As Double
     Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
 
     Dim nBlank As Long
@@ -424,7 +424,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     ' pick the corner / column count that covers no data, raising the axis
     ' maxima if no corner is clear (falls back to top-right on any error)
     PlaceLegend ch, tws, W, H, nBlk, fsL * LG_LINESP, msz, fsTx, useLine, xLog, yLog, _
-                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC, legCorner
+                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC, legCorner, legExtraW, legExtraH
 
     On Error Resume Next
     For p = 1 To 2
@@ -442,7 +442,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     ch.HasTitle = False
     ch.SetElement msoElementChartTitleNone
     On Error GoTo 0
-    co.Width = W: co.Height = H
+    co.Width = W + legExtraW: co.Height = H + legExtraH   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
     ch.Refresh                               ' draw the final layout now
 End Sub
@@ -661,14 +661,16 @@ End Function
 ' column. If none is clear it raises the Y maximum (up to 3 major steps),
 ' then the X maximum (up to 2), one step at a time, and takes the first
 ' level where any layout is clear, so 1 and 2 columns are compared at the
-' lowest axis bounds either needs. If no level clears a corner, the axes
-' are put back and the least-covering option is used.
+' lowest axis bounds either needs. If no level clears a corner (or the
+' legend is too big for the plot), the axes are put back and the legend
+' goes outside the plot on the right, with the chart widened to fit it.
 Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal H As Double, _
                         ByVal n As Long, ByVal lineH As Double, ByVal msz As Double, _
                         ByVal fsTx As Double, ByVal useLine As Boolean, _
                         ByVal xLog As Boolean, ByVal yLog As Boolean, _
                         blkRow() As Long, rc() As Long, ByVal xC As Long, ByVal yC As Long, _
-                        ByVal eC As Long, lblC() As Long, ByRef legCorner As Long)
+                        ByVal eC As Long, lblC() As Long, ByRef legCorner As Long, _
+                        ByRef extraW As Double, ByRef extraH As Double)
     Dim oX() As Double, oY() As Double, offL() As Double, offT() As Double
     Dim offR() As Double, offB() As Double, nO As Long
     Dim sX1() As Double, sY1() As Double, sX2() As Double, sY2() As Double, nS As Long
@@ -813,7 +815,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                 Next corner
             End If
         Next k
-        If bSc = 2147483647 Then Exit Sub        ' legend too big for any layout
+        If bSc = 2147483647 Then GoTo Outside    ' legend too big for any layout
         If iter = 0 Then fSc = bSc: fHits = bHits: fK = bK: fC = bC: fW = bW: fH = bH: fX = bX: fY = bY
         If bHits = 0 Then Exit For
 
@@ -828,11 +830,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         End If
     Next iter
 
-    If bHits > 0 And bHits >= fHits Then          ' bumping didn't help: undo it
-        ch.Axes(xlCategory).MaximumScale = xHi0
-        ch.Axes(xlValue).MaximumScale = yHi0
-        bK = fK: bC = fC: bW = fW: bH = fH: bX = fX: bY = fY
-    End If
+    If bHits > 0 Then GoTo Outside              ' no corner is clear at any level
 
     ' A side legend keeps one column however wide it is; entries only wrap
     ' into rows (row-major: A B / C D) when the legend is laid out
@@ -850,6 +848,31 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     End With
 
     legCorner = bC                           ' final alignment: AnchorLegend
+    Exit Sub
+
+Outside:
+    ' Too many entries, or no clear corner: the legend goes outside the plot
+    ' on the right (the chart is widened for it, and made taller if needed),
+    ' sized from the longest series name so names stay on one line.
+    Dim fs As Double, maxLen As Long, nm As String
+    ch.Axes(xlCategory).MaximumScale = xHi0
+    ch.Axes(xlValue).MaximumScale = yHi0
+    fs = lineH / LG_LINESP
+    For j = 1 To ch.SeriesCollection.Count
+        nm = ch.SeriesCollection(j).Name
+        If Len(nm) > maxLen Then maxLen = Len(nm)
+    Next j
+    lw = 30 + maxLen * fs * 0.55
+    lh = n * fs * 1.25 + 8
+    With ch.Legend
+        .Position = xlLegendPositionRight
+        .IncludeInLayout = False
+        .Width = lw
+        .Height = lh
+    End With
+    extraW = lw + 24
+    If pT + lh + 8 > H Then extraH = pT + lh + 8 - H
+    legCorner = 4
 Done:
 End Sub
 
@@ -944,15 +967,30 @@ End Sub
 ' Align the legend to its corner of the plot box as finally drawn, using the
 ' size Excel actually gave it (a horizontal legend can come out wider than
 ' asked, which left it hanging past the plot's right edge).
-' corner: 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left.
+' corner: 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left, 4 outside right.
 Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, ByVal H As Double)
-    Dim insX As Double, insY As Double
+    Dim insX As Double, insY As Double, p As Long
     On Error Resume Next
     ch.Refresh
     DoEvents
     insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
     insY = (LG_TOP - PA_TOP) * H
+    ' a chart widened for an outside legend can rescale the plot: put it back
+    For p = 1 To 2
+        With ch.PlotArea
+            .InsideLeft = PA_LEFT * W
+            .InsideTop = PA_TOP * H
+            .InsideWidth = PA_WIDTH * W
+            .InsideHeight = PA_HEIGHT * H
+        End With
+    Next p
     With ch.Legend
+        If corner = 4 Then                   ' outside, right of the plot
+            .Left = ch.PlotArea.InsideLeft + ch.PlotArea.InsideWidth + 18
+            .Top = ch.PlotArea.InsideTop
+            ch.Refresh
+            Exit Sub
+        End If
         If corner Mod 2 = 0 Then
             .Left = ch.PlotArea.InsideLeft + ch.PlotArea.InsideWidth - insX - .Width
         Else
