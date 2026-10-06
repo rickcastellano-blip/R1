@@ -887,19 +887,19 @@ Outside:
 
     ' Excel may still give the legend less width than asked and wrap long
     ' names (a wrapped entry is taller than the rest): widen and re-check
-    Dim try As Long, eMin As Double, eMax As Double, eh As Double
-    For try = 1 To 4
+    Dim wrapTry As Long, hMinE As Double, hMaxE As Double, hEnt As Double
+    For wrapTry = 1 To 4
         ch.Refresh
         DoEvents
-        eMin = 0: eMax = 0
+        hMinE = 0: hMaxE = 0
         On Error Resume Next
         For j = 1 To ch.Legend.LegendEntries.Count
-            eh = ch.Legend.LegendEntries(j).Height
-            If eMin = 0 Or eh < eMin Then eMin = eh
-            If eh > eMax Then eMax = eh
+            hEnt = ch.Legend.LegendEntries(j).Height
+            If hMinE = 0 Or hEnt < hMinE Then hMinE = hEnt
+            If hEnt > hMaxE Then hMaxE = hEnt
         Next j
         On Error GoTo Done
-        If eMin <= 0 Or eMax < eMin * 1.5 Then Exit For   ' nothing wrapped
+        If hMinE <= 0 Or hMaxE < hMinE * 1.5 Then Exit For   ' nothing wrapped
         lw = lw * 1.15
         extraW = lw + 24
         ch.Parent.Width = W + extraW
@@ -908,7 +908,7 @@ Outside:
             .Width = lw
             .Height = lh
         End With
-    Next try
+    Next wrapTry
     legCorner = 4
 Done:
 End Sub
