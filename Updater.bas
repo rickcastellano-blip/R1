@@ -10,6 +10,7 @@ Private Const LINE_MAP   As String = "LineGraph=LineGraph.bas"
 Private Const RCPT_MAP   As String = "RCPTImport=RCPTImport.bas"
 Private Const RECOV_MAP  As String = "RCPTRecovered=RCPTRecovered.bas"
 Private Const NT492_MAP  As String = "NTBuild492=NTBuild492.bas"
+Private Const NT492R_MAP As String = "NTBuild492Recovered=NTBuild492Recovered.bas"
 '==============================================================
 
 ' Button macros, one per button on the Buttons sheet. Each replaces the code
@@ -36,6 +37,10 @@ End Sub
 
 Public Sub UpdateNTBuild492()
     UpdateModules NT492_MAP
+End Sub
+
+Public Sub UpdateNTBuild492Recovered()
+    UpdateModules NT492R_MAP
 End Sub
 
 Private Sub UpdateModules(moduleMap As String)

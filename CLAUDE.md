@@ -26,7 +26,7 @@ Read README.md first: it maps every button to its macro, Excel module, file and 
 - No success message boxes for the graphs, updaters or NT492 (errors only). RCPT keeps its
   per-import summary.
 - Excel module names equal file names (BarGraph, LineGraph, RCPTImport, RCPTRecovered,
-  NTBuild492); keep the button macro names stable so existing button assignments work.
+  NTBuild492, NTBuild492Recovered); keep the button macro names stable so existing button assignments work.
 - Line Graph settings are found by header text on the Buttons sheet, never by fixed cell.
 - Numbers written into worksheet formulas go through `Num()` (locale-safe decimal point).
 

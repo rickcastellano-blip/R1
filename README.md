@@ -13,6 +13,7 @@ one macro, and the **Update** button next to it pulls that macro's module from t
 | RCPT | `AddRCPTRunFromCSV` | RCPTImport | `RCPTImport.bas` | `UpdateRCPT` |
 | RCPT Recovered | `AddRun_RecoveredTTi` | RCPTRecovered | `RCPTRecovered.bas` | `UpdateRCPTRecovered` |
 | NT492 | `AnalyzeNTBuild492` | NTBuild492 | `NTBuild492.bas` | `UpdateNTBuild492` |
+| NT492 Recovered | `AnalyzeNTBuild492Recovered` | NTBuild492Recovered | `NTBuild492Recovered.bas` | `UpdateNTBuild492Recovered` |
 | (the Update buttons) | – | Updaters | `Updater.bas` | – |
 | Do not click | `DoNotClick` | Module7 | not in the repo | – |
 
