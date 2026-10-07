@@ -97,8 +97,6 @@ Public Sub AnalyzeNTBuild492()
 
     Application.StatusBar = False
     Application.ScreenUpdating = True
-    ws.Activate
-    ws.Cells(r, C_TEMP).Select      ' next: type temperature and thickness
     Exit Sub
 
 Cleanup:
