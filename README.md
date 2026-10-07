@@ -17,8 +17,11 @@ one macro, and the **Update** button next to it pulls that macro's module from t
 | (the Update buttons) | – | Updaters | `Updater.bas` | – |
 | Do not click | `DoNotClick` | Module7 | not in the repo | – |
 
-Every module is self-contained: an Update button replaces exactly one module and cannot
-affect any other button.
+An Update button replaces exactly one module. The modules are self-contained except the
+two recovered importers: **RCPT Recovered** and **NT492 Recovered** only read their file,
+then use the analysis in **RCPTImport** and **NTBuild492**. So analysis changes arrive with
+the RCPT / NT492 Update buttons and apply to both buttons of a pair; a recovered Update
+button only changes how its files are read.
 
 ## Updating
 
@@ -61,10 +64,12 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 
 Imports a TTi CPX400DP logger CSV into the **RCPT** sheet, one row (and current chart) per
 6 h run; a file holding several runs gives several rows. Columns are read from the
-`#TimeStamp` header (5- and 9-column layouts).
+`#TimeStamp` header (5- and 9-column layouts). **RCPT Recovered** reads Test Bridge
+recovered logs (Volts in field 2, Amps in field 4) and uses the same analysis.
 
 ## NT BUILD 492
 
 Imports a TTi logger CSV into the **NT492** sheet, one row per specimen. Columns A:M match
 the *Data Summary* sheet of the NT492 Measurement workbook so rows copy straight across;
-N:P add an RCPT-equivalent charge, its class and bulk resistivity.
+N:P add an RCPT-equivalent charge, its class and bulk resistivity. **NT492 Recovered**
+reads Test Bridge recovered logs and uses the same analysis.

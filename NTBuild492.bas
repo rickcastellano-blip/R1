@@ -1,7 +1,8 @@
 Option Explicit
 
 ' NT BUILD 492 - read a TTi CPX400DP logger CSV and write one row per
-' specimen. Columns A:M match the "Data Summary" sheet of the NT492
+' specimen. This module also holds the shared analysis (NT492AnalyzeLog),
+' which the NT492 Recovered button calls after reading its own file format. Columns A:M match the "Data Summary" sheet of the NT492
 ' Measurement workbook, so a row copies straight across; that workbook
 ' works out depths, Dnssm and the categories. N:P add an RCPT-equivalent
 ' charge, its ASTM C1202 class, and bulk resistivity from I0.
@@ -32,8 +33,29 @@ Private Const C_CHK As Long = 13, C_QEQ As Long = 14, C_QCLS As Long = 15, C_RHO
 
 '==================== BUTTON: Analyze NT Build 492 ==============
 Public Sub AnalyzeNTBuild492()
-    Dim path As String, spec As String, msg As String
+    Dim path As String, msg As String
     Dim tS() As Double, vA() As Double, aA() As Double, n As Long
+
+    path = PickCSVFile()
+    If Len(path) = 0 Then Exit Sub
+
+    Application.StatusBar = "Reading " & Dir(path) & " ..."
+    msg = ReadLog(path, tS, vA, aA, n)
+    Application.StatusBar = False
+    If Len(msg) > 0 Then MsgBox msg, vbExclamation, "NT Build 492": Exit Sub
+
+    NT492AnalyzeLog tS, vA, aA, n, SpecimenFromFileName(path)
+End Sub
+
+'================ shared analysis (also used by NT492 Recovered) ===========
+' Everything after a log is read: run detection, Table 1 check, RCPT-equivalent
+' charge, the row on the NT492 sheet and its chart. tS = seconds since
+' 1899-12-30, vA = volts, aA = amps, 1..n; spec = sample name.
+' NTBuild492Recovered calls this, so keep its arguments unchanged unless both
+' modules are updated together.
+Public Sub NT492AnalyzeLog(tS() As Double, vA() As Double, aA() As Double, _
+                           ByVal n As Long, ByVal spec As String)
+    Dim msg As String
     Dim dTest As Date, i30 As Double, has30 As Boolean
     Dim U As Double, i0 As Double, iFin As Double, hrs As Double
     Dim iStart As Long, iEnd As Long
@@ -41,17 +63,11 @@ Public Sub AnalyzeNTBuild492()
     Dim ws As Worksheet, r As Long
     Dim qEq As Double, qHrs As Double, qShort As Boolean
 
-    path = PickCSVFile()
-    If Len(path) = 0 Then Exit Sub
-
     On Error GoTo Cleanup
     Application.ScreenUpdating = False
-    Application.StatusBar = "Reading " & Dir(path) & " ..."
 
-    msg = ReadLog(path, tS, vA, aA, n)
-    If Len(msg) = 0 Then msg = FindRun(tS, vA, aA, n, iStart, iEnd, U, i30, has30, i0, iFin)
+    msg = FindRun(tS, vA, aA, n, iStart, iEnd, U, i30, has30, i0, iFin)
     If Len(msg) > 0 Then
-        Application.StatusBar = False
         Application.ScreenUpdating = True
         MsgBox msg, vbExclamation, "NT Build 492"
         Exit Sub
@@ -60,7 +76,6 @@ Public Sub AnalyzeNTBuild492()
     hrs = (tS(iEnd) - tS(iStart)) / 3600#
     qEq = RCPTEquivalent(tS, aA, iStart, iEnd, U, qHrs, qShort)
     dTest = Int(tS(iStart) / 86400#)
-    spec = SpecimenFromFileName(path)
 
     ' Table 1 is keyed on the 30 V current; without a 30 V reading use I0
     Table1 IIf(has30, i30, i0) * 1000#, uExp, tExp
@@ -95,7 +110,6 @@ Public Sub AnalyzeNTBuild492()
 
     AddCurrentChart ws, r, spec, U, tS, aA, iStart, iEnd
 
-    Application.StatusBar = False
     Application.ScreenUpdating = True
     Exit Sub
 

@@ -1,5 +1,10 @@
 Option Explicit
 
+' RCPT (ASTM C1202) import for TTi CPX400DP logger CSVs: one row (and current
+' chart) per 6 h run on the RCPT sheet; a log holding several runs gives
+' several rows. This module also holds the shared analysis (RCPTAnalyzeLog),
+' which the RCPT Recovered button calls after reading its own file format.
+
 '=========================== CONFIG ===========================
 Private Const SHEET_NAME    As String = "RCPT"
 Private Const LAST_COL      As Long = 16         ' A:P - used to find an empty row
@@ -20,42 +25,54 @@ Private Const PARTIAL_FILL         As Long = 13431551  ' RGB(255,242,204) light 
 
 '====================== BUTTON: Add RCPT Run ==================
 Public Sub AddRCPTRunFromCSV()
-    Dim path As String, sample As String
-    Dim dTest As Date
-    Dim hA As Double, i6A As Double, charge As Double, onHours As Double
-    Dim nUsed As Long, msg As String
-    Dim ws As Worksheet, r As Long
-    Dim tArr() As Double, aArr() As Double, nPts As Long
-    Dim isPartial As Boolean, availHrs As Double, estQ As Double, cls As String
-    Dim startAfter As Double, runEnd As Double, nRuns As Long, summary As String
+    Dim path As String, msg As String
+    Dim tS() As Double, vA() As Double, aA() As Double, n As Long
 
     path = PickCSVFile()
     If Len(path) = 0 Then Exit Sub
 
+    Application.StatusBar = "Reading " & Dir(path) & " ..."
+    msg = ReadLog(path, tS, vA, aA, n)
+    Application.StatusBar = False
+    If Len(msg) > 0 Then MsgBox msg, vbExclamation, "Add RCPT Run": Exit Sub
+
+    RCPTAnalyzeLog tS, vA, aA, n, SampleFromFileName(path)
+End Sub
+
+'================ shared analysis (also used by RCPT Recovered) ============
+' Everything after a log is read: each 6 h run becomes a row on the RCPT sheet
+' with its chart, then one summary message. tS = seconds since 1899-12-30,
+' vA = volts, aA = amps, 1..n; sample = sample name. RCPTRecovered calls
+' this, so keep its arguments unchanged unless both modules are updated together.
+Public Sub RCPTAnalyzeLog(tS() As Double, vA() As Double, aA() As Double, _
+                          ByVal n As Long, ByVal sample As String)
+    Dim dTest As Date, msg As String
+    Dim hA As Double, i6A As Double, charge As Double, onHours As Double
+    Dim nUsed As Long
+    Dim ws As Worksheet, r As Long
+    Dim tArr() As Double, aArr() As Double, nPts As Long
+    Dim isPartial As Boolean, availHrs As Double, estQ As Double, cls As String
+    Dim iFrom As Long, iPrev As Long, nRuns As Long, summary As String
+
     On Error GoTo Cleanup
     Application.ScreenUpdating = False
-    sample = SampleFromFileName(path)
     Set ws = ThisWorkbook.Worksheets(SHEET_NAME)
 
-    ' one row per run: each pass reads the file from the end of the last run
-    startAfter = -1
-    Do
-        Application.StatusBar = "Reading " & Dir(path) & " (run " & nRuns + 1 & ") ..."
-        msg = ParseRCPT(path, startAfter, dTest, hA, i6A, charge, onHours, nUsed, tArr, aArr, nPts, _
-                        isPartial, availHrs, runEnd)
+    ' one row per run: each pass starts where the last run ended
+    iFrom = 1
+    Do While iFrom <= n
+        iPrev = iFrom
+        msg = AnalyzeRun(tS, vA, aA, n, iFrom, dTest, hA, i6A, charge, onHours, nUsed, _
+                         tArr, aArr, nPts, isPartial, availHrs)
         If Len(msg) > 0 Then
             If nRuns = 0 Then
-                Application.StatusBar = False
                 Application.ScreenUpdating = True
                 MsgBox msg, vbExclamation, "Add RCPT Run"
                 Exit Sub
             End If
-            ' no further run in the file (or a fragment too short to use)
-            If InStr(1, msg, "No sample above", vbTextCompare) <> 1 Then
-                summary = summary & vbCrLf & "Run " & nRuns + 1 & " skipped: " & msg & vbCrLf
-            End If
-            If InStr(1, msg, "No sample above", vbTextCompare) = 1 Or runEnd <= startAfter Then Exit Do
-            startAfter = runEnd
+            ' no further run in the log (or a fragment too short to use)
+            If InStr(1, msg, "No sample above", vbTextCompare) = 1 Then Exit Do
+            summary = summary & vbCrLf & "Run " & nRuns + 1 & " skipped: " & msg & vbCrLf
         Else
             nRuns = nRuns + 1
 
@@ -123,14 +140,11 @@ Public Sub AddRCPTRunFromCSV()
                    "Voltage duration: " & Format(onHours, "0.00") & " hr" & vbCrLf & _
                    "Samples used:     " & Format(nUsed, "#,##0") & vbCrLf
 
-            If runEnd <= startAfter Then Exit Do
-            startAfter = runEnd
         End If
+        If iFrom <= iPrev Then Exit Do               ' safety: always move on
     Loop
 
-    Application.StatusBar = False
     Application.ScreenUpdating = True
-
     MsgBox "Sample " & sample & ": " & nRuns & IIf(nRuns = 1, " run", " runs") & " added." & _
            vbCrLf & vbCrLf & summary, vbInformation, "Done"
     Exit Sub
@@ -141,27 +155,121 @@ Cleanup:
     If Err.Number <> 0 Then MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical
 End Sub
 
-'====================== CSV parse + math ======================
-' Parses the first run that starts after startAfter (seconds; -1 = from the
-' top). The run ends once the voltage has been off for OFF_GAP_SEC; runEnd
-' returns where to look for the next run.
-Private Function ParseRCPT(path As String, ByVal startAfter As Double, ByRef dTest As Date, _
-                           ByRef hA As Double, ByRef i6A As Double, _
-                           ByRef charge As Double, ByRef onHours As Double, _
-                           ByRef nUsed As Long, ByRef tArr() As Double, _
-                           ByRef aArr() As Double, ByRef nPts As Long, _
-                           ByRef isPartial As Boolean, ByRef availHrs As Double, _
-                           ByRef runEnd As Double) As String
-    Dim ff As Integer, txt As String, lines() As String
-    Dim i As Long, ln As String
-    Dim f() As String, hdrMsg As String
-    Dim tCol As Long, vCol As Long, aCol As Long, maxCol As Long
+' One run, from reading iFrom on: the first reading above V_THRESHOLD starts
+' it, the 6 h integral and currents are taken as before, and it ends once the
+' voltage has been off for OFF_GAP_SEC. iFrom returns where the next run
+' search starts (n + 1 at the end of the log).
+Private Function AnalyzeRun(tS() As Double, vA() As Double, aA() As Double, ByVal n As Long, _
+                            ByRef iFrom As Long, ByRef dTest As Date, _
+                            ByRef hA As Double, ByRef i6A As Double, _
+                            ByRef charge As Double, ByRef onHours As Double, _
+                            ByRef nUsed As Long, ByRef tArr() As Double, _
+                            ByRef aArr() As Double, ByRef nPts As Long, _
+                            ByRef isPartial As Boolean, ByRef availHrs As Double) As String
+    Dim i As Long, nextFrom As Long, offIdx As Long
     Dim v As Double, a As Double, tsec As Double
     Dim t0 As Double, s As Double, prevS As Double, prevA As Double
-    Dim prevT As Double, prevV As Double, onSec As Double
-    Dim found0 As Boolean, hFound As Boolean, endFound As Boolean
-    Dim havePrev As Boolean, offStart As Double
+    Dim prevT As Double, prevV As Double, onSec As Double, offStart As Double
+    Dim found0 As Boolean, hFound As Boolean, endFound As Boolean, havePrev As Boolean
     Dim cap As Long
+
+    charge = 0: onSec = 0: nUsed = 0: nPts = 0
+    isPartial = False: availHrs = 0: hA = 0: i6A = 0
+    cap = 1024
+    ReDim tArr(1 To cap)
+    ReDim aArr(1 To cap)
+    nextFrom = n + 1
+
+    For i = iFrom To n
+        v = vA(i): a = aA(i): tsec = tS(i)
+
+        ' end of this run: voltage off for OFF_GAP_SEC
+        If found0 Then
+            If v > V_THRESHOLD Then
+                offStart = 0
+            ElseIf offStart = 0 Then
+                offStart = tsec: offIdx = i
+            ElseIf tsec - offStart >= OFF_GAP_SEC Then
+                nextFrom = offIdx + 1
+                Exit For
+            End If
+        End If
+
+        If havePrev Then
+            If v > V_THRESHOLD And prevV > V_THRESHOLD Then onSec = onSec + (tsec - prevT)
+        End If
+
+        If Not found0 Then
+            If v > V_THRESHOLD Then
+                found0 = True
+                t0 = tsec
+                dTest = Int(tsec / 86400#)
+                prevS = 0
+                prevA = a
+                nUsed = 1
+                AddPoint tArr, aArr, nPts, cap, 0#, a
+            End If
+        Else
+            s = tsec - t0
+            If s <= TEST_SECONDS Then
+                ' only voltage-on readings count, so a run that stops
+                ' early isn't diluted by the switched-off tail
+                If v > V_THRESHOLD Then
+                    charge = charge + (prevA + a) / 2# * (s - prevS)
+                    prevS = s
+                    prevA = a
+                    nUsed = nUsed + 1
+                    AddPoint tArr, aArr, nPts, cap, s / 3600#, a
+                    If Not hFound Then
+                        If s >= H_OFFSET_SEC Then
+                            hA = a
+                            hFound = True
+                        End If
+                    End If
+                End If
+            ElseIf Not endFound Then
+                ' current at 6 h; if the supply already switched off
+                ' (a timed 6 h run), the last reading within 6 h
+                If v > V_THRESHOLD Then i6A = a Else i6A = prevA
+                endFound = True
+            End If
+        End If
+
+        prevT = tsec
+        prevV = v
+        havePrev = True
+    Next i
+    iFrom = nextFrom
+    onHours = onSec / 3600#
+
+    If nPts > 0 Then
+        ReDim Preserve tArr(1 To nPts)
+        ReDim Preserve aArr(1 To nPts)
+    End If
+
+    If Not found0 Then
+        AnalyzeRun = "No sample above " & V_THRESHOLD & " V was found - is this an RCPT log?"
+    ElseIf Not hFound Then
+        AnalyzeRun = "The log ends less than " & H_OFFSET_SEC & " s after voltage was applied."
+    ElseIf hA <= 0 Then
+        AnalyzeRun = "Initial current read as zero - cannot compute the increase factor."
+    ElseIf Not endFound Then
+        ' short log: extrapolated and flagged by the caller
+        isPartial = True
+        availHrs = prevS / 3600#
+        i6A = TailMean(aArr, nPts, TAIL_POINTS)
+    End If
+End Function
+
+'====================== CSV read ==============================
+' Reads every row with a timestamp, a voltage and a current into tS / vA /
+' aA (1..n). Columns come from the "#TimeStamp,..." header (5- and 9-column
+' layouts); without one, TimeStamp,Volts,_,Amps.
+Private Function ReadLog(path As String, ByRef tS() As Double, ByRef vA() As Double, _
+                         ByRef aA() As Double, ByRef n As Long) As String
+    Dim ff As Integer, txt As String, lines() As String, ln As String, f() As String
+    Dim i As Long, nRows As Long, hdrMsg As String
+    Dim tCol As Long, vCol As Long, aCol As Long, maxCol As Long
 
     On Error GoTo Fail
     ff = FreeFile
@@ -174,139 +282,52 @@ Private Function ParseRCPT(path As String, ByVal startAfter As Double, ByRef dTe
     lines = Split(txt, vbLf)
     txt = ""
 
-    charge = 0
-    onSec = 0
-    nUsed = 0
-    nPts = 0
-    isPartial = False
-    availHrs = 0
-    hA = 0: i6A = 0: runEnd = startAfter
-    cap = 1024
-    ReDim tArr(1 To cap)
-    ReDim aArr(1 To cap)
-
-    ' Default layout TimeStamp,Volts,TimeStamp,Amps (0-based columns);
-    ' replaced by the #TimeStamp header row when the file has one
+    ReDim tS(1 To UBound(lines) + 1)
+    ReDim vA(1 To UBound(lines) + 1)
+    ReDim aA(1 To UBound(lines) + 1)
     tCol = 0: vCol = 1: aCol = 3: maxCol = 3
-
+    n = 0
     For i = 0 To UBound(lines)
         ln = lines(i)
         If Len(ln) > 20 Then
             If StrComp(Left$(ln, 10), "#TimeStamp", vbTextCompare) = 0 Then
                 hdrMsg = MapColumns(ln, tCol, vCol, aCol)
-                If Len(hdrMsg) > 0 Then ParseRCPT = hdrMsg: Exit Function
+                If Len(hdrMsg) > 0 Then ReadLog = hdrMsg: Exit Function
                 maxCol = tCol
                 If vCol > maxCol Then maxCol = vCol
                 If aCol > maxCol Then maxCol = aCol
             ElseIf Left$(ln, 1) <> "#" Then
+                nRows = nRows + 1
                 f = Split(ln, ",")
-                If UBound(f) < maxCol Then GoTo NextLine
-                If Len(f(vCol)) = 0 Or Len(f(aCol)) = 0 Or Len(f(tCol)) < 19 Then GoTo NextLine
-
-                v = Val(f(vCol))
-                a = Val(f(aCol))
-                tsec = StampToSeconds(f(tCol))
-                If tsec <= startAfter Then GoTo NextLine     ' belongs to an earlier run
-                runEnd = tsec
-
-                ' end of this run: voltage off for OFF_GAP_SEC
-                If found0 Then
-                    If v > V_THRESHOLD Then
-                        offStart = 0
-                    ElseIf offStart = 0 Then
-                        offStart = tsec
-                    ElseIf tsec - offStart >= OFF_GAP_SEC Then
-                        runEnd = offStart
-                        Exit For
+                If UBound(f) >= maxCol Then
+                    If Len(Trim$(f(vCol))) > 0 And Len(Trim$(f(aCol))) > 0 And Len(f(tCol)) >= 19 Then
+                        n = n + 1
+                        tS(n) = StampToSeconds(f(tCol))
+                        vA(n) = Val(f(vCol))
+                        aA(n) = Val(f(aCol))
                     End If
-                End If
-
-                If havePrev Then
-                    If v > V_THRESHOLD And prevV > V_THRESHOLD Then
-                        onSec = onSec + (tsec - prevT)
-                    End If
-                End If
-
-                If Not found0 Then
-                    If v > V_THRESHOLD Then
-                        found0 = True
-                        t0 = tsec
-                        dTest = DateSerial(CLng(Mid$(f(tCol), 1, 4)), _
-                                           CLng(Mid$(f(tCol), 6, 2)), _
-                                           CLng(Mid$(f(tCol), 9, 2)))
-                        prevS = 0
-                        prevA = a
-                        nUsed = 1
-                        AddPoint tArr, aArr, nPts, cap, 0#, a
-                    End If
-                Else
-                    s = tsec - t0
-                    If s <= TEST_SECONDS Then
-                        ' only voltage-on readings count, so a run that stops
-                        ' early isn't diluted by the switched-off tail
-                        If v > V_THRESHOLD Then
-                            charge = charge + (prevA + a) / 2# * (s - prevS)
-                            prevS = s
-                            prevA = a
-                            nUsed = nUsed + 1
-                            AddPoint tArr, aArr, nPts, cap, s / 3600#, a
-                            If Not hFound Then
-                                If s >= H_OFFSET_SEC Then
-                                    hA = a
-                                    hFound = True
-                                End If
-                            End If
-                        End If
-                    ElseIf Not endFound Then
-                        ' current at 6 h; if the supply already switched off
-                        ' (a timed 6 h run), the last reading within 6 h
-                        If v > V_THRESHOLD Then i6A = a Else i6A = prevA
-                        endFound = True
-                    End If
-                End If
-
-                prevT = tsec
-                prevV = v
-                havePrev = True
-
-                If (i And 65535) = 0 Then
-                    Application.StatusBar = "Parsing ... " & Format(i, "#,##0") & " lines"
-                    DoEvents
                 End If
             End If
         End If
-NextLine:
+        If (i And 65535) = 0 Then
+            Application.StatusBar = "Parsing ... " & Format(i, "#,##0") & " lines"
+            DoEvents
+        End If
     Next i
-
     Erase lines
-    onHours = onSec / 3600#
 
-    If nPts > 0 Then
-        ReDim Preserve tArr(1 To nPts)
-        ReDim Preserve aArr(1 To nPts)
-    End If
-
-    If Not found0 Then
-        ParseRCPT = "No sample above " & V_THRESHOLD & " V was found - is this an RCPT log?"
-    ElseIf Not hFound Then
-        ParseRCPT = "The log ends less than " & H_OFFSET_SEC & " s after voltage was applied."
-    ElseIf hA <= 0 Then
-        ParseRCPT = "Initial current read as zero - cannot compute the increase factor."
-    ElseIf Not endFound Then
-        ' Short log: return what we have and let the caller decide
-        isPartial = True
-        availHrs = prevS / 3600#
-        i6A = TailMean(aArr, nPts, TAIL_POINTS)
-        ParseRCPT = ""
-    Else
-        ParseRCPT = ""
+    If n = 0 And nRows > 0 Then
+        ReadLog = "This file has no readings - its " & Format(nRows, "#,##0") & _
+                  " rows are timestamps only, so the logger stored no volts or amps."
+    ElseIf n < 2 Then
+        ReadLog = "No data rows found - is this a TTi measurement CSV?"
     End If
     Exit Function
 
 Fail:
     On Error Resume Next
     Close #ff
-    ParseRCPT = "Could not read the file:" & vbCrLf & path & vbCrLf & vbCrLf & Err.Description
+    ReadLog = "Could not read the file:" & vbCrLf & path & vbCrLf & vbCrLf & Err.Description
 End Function
 
 ' Finds the first Volts and first Amps columns in the "#TimeStamp,..." header row,

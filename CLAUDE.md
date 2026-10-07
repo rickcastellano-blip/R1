@@ -15,9 +15,16 @@ Read README.md first: it maps every button to its macro, Excel module, file and 
 
 ## Code rules
 
-- **Every module is self-contained.** No module calls into another; helpers are `Private`
-  and copied where needed (e.g. `NiceScale`, `IsNum`, `CellText` exist in both graph
-  modules). Only the button macros are `Public`.
+- **Every module is self-contained,** with one deliberate exception: the recovered
+  importers. RCPTImport holds the RCPT analysis as `Public Sub RCPTAnalyzeLog` and
+  NTBuild492 holds the NT492 analysis as `Public Sub NT492AnalyzeLog`; RCPTRecovered and
+  NTBuild492Recovered only read their file and name the sample, then call
+  `RCPTImport.RCPTAnalyzeLog` / `NTBuild492.NT492AnalyzeLog`. Analysis changes go in
+  RCPTImport / NTBuild492 only (arriving with their Update buttons). If a shared routine's
+  arguments change, tell the user to click both Update buttons. Otherwise no module calls
+  into another; helpers are `Private` and copied where needed (e.g. `NiceScale`, `IsNum`,
+  `CellText` in both graph modules). Only button macros and the two shared routines are
+  `Public`.
 - **VBA is case-insensitive.** No two names in a procedure may differ only by case
   (`eh`/`eH` broke a compile), and no name may be a keyword in disguise (`oR` = `Or`).
   Before pushing, scan each procedure for case-insensitive duplicate declarations.
@@ -33,7 +40,9 @@ Read README.md first: it maps every button to its macro, Excel module, file and 
 ## Domain notes
 
 - TTi logger CSVs: `#TimeStamp,Volts,TimeStamp,Amps,...` (also a 9-column layout and Test
-  Bridge "recovered" exports, where headers may label every channel Volts). Rows with blank
+  Bridge "recovered" exports, where headers may label every channel Volts or name one
+  column more than the rows hold; the recovered readers therefore always take Volts from
+  field 2 and Amps from field 4). Rows with blank
   readings are skipped. Switch-on/off transients (a reading between levels) must not be taken
   as initial or final currents.
 - RCPT (ASTM C1202): 60 V, 6 h, charge in coulombs; a file may contain several runs.
