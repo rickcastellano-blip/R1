@@ -105,7 +105,7 @@ Public Sub RCPTAnalyzeLog(tS() As Double, vA() As Double, aA() As Double, _
                 ws.Cells(r, 15).Formula = "=M" & r
             End If
 
-            ws.Cells(r, 1).NumberFormat = "m/d/yyyy"
+            ws.Cells(r, 1).NumberFormat = "m/d/yyyy h:mm"
             ws.Cells(r, 8).NumberFormat = "0"
             ws.Cells(r, 9).NumberFormat = "0.000"
             ws.Range(ws.Cells(r, 10), ws.Cells(r, 13)).NumberFormat = "0"
@@ -131,7 +131,7 @@ Public Sub RCPTAnalyzeLog(tS() As Double, vA() As Double, aA() As Double, _
             summary = summary & IIf(nRuns > 1, vbCrLf, "") & _
                    "Run " & nRuns & ": row " & r & vbCrLf & _
                    IIf(isPartial, "*** PARTIAL: only " & Format(availHrs, "0.00") & " h of data ***" & vbCrLf, "") & _
-                   "Test date:        " & Format(dTest, "m/d/yyyy") & vbCrLf & _
+                   "Test start:       " & Format(dTest, "m/d/yyyy h:mm") & vbCrLf & _
                    "Initial current:  " & Format(hA * 1000#, "0") & " mA  (at " & H_OFFSET_SEC & " s)" & vbCrLf & _
                    "Increase factor:  " & Format(i6A / hA, "0.000") & vbCrLf & _
                    "Integral (" & IIf(isPartial, Format(availHrs, "0.00"), "6") & " h):   " & Format(charge, "#,##0") & " C" & vbCrLf & _
@@ -203,7 +203,7 @@ Private Function AnalyzeRun(tS() As Double, vA() As Double, aA() As Double, ByVa
             If v > V_THRESHOLD Then
                 found0 = True
                 t0 = tsec
-                dTest = Int(tsec / 86400#)
+                dTest = CDate(tsec / 86400#)         ' date and time the voltage came on
                 prevS = 0
                 prevA = a
                 nUsed = 1
