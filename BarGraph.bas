@@ -36,6 +36,7 @@ Sub GenerateStrengthBarGraph()
     Dim fsT As Double, fsA As Double, fsL As Double
     Dim wAX As Double, axMax As Double, axStep As Double
     Dim maxLen As Long, rot As Long, paH As Double
+    Dim legCorner As Long, legExtraW As Double, legExtraH As Double
 
     '--- 1. pick the range (you can switch workbooks in this dialog) --------
     On Error Resume Next
@@ -278,6 +279,22 @@ Sub GenerateStrengthBarGraph()
     Next p
     ch.Legend.Left = LG_RIGHT * W - ch.Legend.Width
     ch.Legend.Top = LG_TOP * H
+    On Error GoTo 0
+
+    ' pick the corner / column count that covers no bar, raising the axis
+    ' maximum if no corner is clear, or put the legend outside the plot
+    PlaceBarLegend ch, tws, W, H, nBlk, nRow, ch.ChartGroups(1).GapWidth, fsL * LG_LINESP, _
+                   blkRow, rc, valC, errC, legCorner, legExtraW, legExtraH
+
+    On Error Resume Next
+    For p = 1 To 2
+        With ch.PlotArea
+            .InsideLeft = PA_LEFT * W
+            .InsideTop = PA_TOP * H
+            .InsideWidth = PA_WIDTH * W
+            .InsideHeight = paH * H
+        End With
+    Next p
     src.Select
     On Error GoTo 0
 
@@ -286,7 +303,8 @@ Sub GenerateStrengthBarGraph()
     ch.SetElement msoElementChartTitleNone
     On Error GoTo 0
 
-    co.Width = W: co.Height = H
+    co.Width = W + legExtraW: co.Height = H + legExtraH   ' wider/taller only for an outside legend
+    AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
     ch.Refresh                               ' draw the final layout now
 End Sub
 
@@ -325,4 +343,259 @@ End Function
 Private Sub LinkTitle(t As AxisTitle, c As Range)
     On Error Resume Next
     t.Formula = "='" & Replace(c.Worksheet.Name, "'", "''") & "'!" & c.Address(True, True)
+End Sub
+
+'--- legend placement (same approach as the line graph's) -------------------
+' Tries every corner (top-right, top-left, bottom-right, bottom-left) with 1
+' or 2 legend columns and keeps the one that covers no bar (error bars
+' included), preferring top-right and one column. If none is clear it raises
+' the Y maximum one major step at a time (up to 3) and takes the first level
+' where any layout is clear. If no level clears a corner, or the legend is too
+' big for the plot, the axis is put back and the legend goes outside the plot
+' on the right, with the chart widened to fit it.
+Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal H As Double, _
+                           ByVal n As Long, ByVal nCat As Long, ByVal gapPct As Double, _
+                           ByVal lineH As Double, blkRow() As Long, rc() As Long, _
+                           ByVal valC As Long, ByVal errC As Long, ByRef legCorner As Long, _
+                           ByRef extraW As Double, ByRef extraH As Double)
+    Dim bx0() As Double, bx1() As Double, by0() As Double, by1() As Double, nB As Long
+    Dim j As Long, cIdx As Long, v As Variant, e As Variant, barW As Double, barTop As Double
+    Dim pL As Double, pT As Double, pW As Double, pH As Double, insX As Double, insY As Double
+    Dim w1 As Double, h1 As Double, eW As Double, eH As Double, padW As Double, padH As Double
+    Dim i As Long, eWh As Double, gapH As Double, kMax As Long, yHi0 As Double
+    Dim yLo As Double, yHi As Double, iter As Long, k As Long, corner As Long, rws As Long
+    Dim hits As Long, sc As Long, lw As Double, lh As Double, lx As Double, ly As Double
+    Dim bSc As Long, bHits As Long, bK As Long, bC As Long
+    Dim bW As Double, bH As Double, bX As Double, bY As Double
+
+    On Error GoTo Done
+    legCorner = 0: extraW = 0: extraH = 0
+    If n < 1 Or nCat < 1 Then Exit Sub
+
+    ' bars as rectangles: x in category units (category c spans c-0.5..c+0.5),
+    ' y from 0 to value + error
+    ReDim bx0(1 To n * nCat): ReDim bx1(1 To n * nCat)
+    ReDim by0(1 To n * nCat): ReDim by1(1 To n * nCat)
+    barW = 1# / (n + gapPct / 100#)
+    For j = 1 To n
+        For cIdx = 1 To rc(j)
+            v = tws.Cells(blkRow(j) + cIdx - 1, valC).Value
+            If IsNum(v) Then
+                e = tws.Cells(blkRow(j) + cIdx - 1, errC).Value
+                barTop = CDbl(v)
+                If IsNum(e) Then barTop = barTop + Abs(CDbl(e))
+                nB = nB + 1
+                bx0(nB) = cIdx - 0.5 + (gapPct / 100#) * barW / 2# + (j - 1) * barW
+                bx1(nB) = bx0(nB) + barW
+                If barTop >= 0 Then by0(nB) = 0: by1(nB) = barTop Else by0(nB) = barTop: by1(nB) = 0
+            End If
+        Next cIdx
+    Next j
+
+    pL = PA_LEFT * W: pT = PA_TOP * H: pW = PA_WIDTH * W: pH = PA_HEIGHT * H
+    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
+    insY = (LG_TOP - PA_TOP) * H
+
+    ' measure the legend as Excel lays it out (one column, every entry shown)
+    With ch.Legend
+        .Position = xlLegendPositionRight
+        .IncludeInLayout = False
+    End With
+    ch.Refresh
+    DoEvents
+    w1 = ch.Legend.Width: h1 = ch.Legend.Height
+    If h1 < n * lineH Then h1 = n * lineH + 4
+    On Error Resume Next
+    For i = 1 To ch.Legend.LegendEntries.Count
+        If ch.Legend.LegendEntries(i).Width > eW Then eW = ch.Legend.LegendEntries(i).Width
+        If ch.Legend.LegendEntries(i).Height > eH Then eH = ch.Legend.LegendEntries(i).Height
+    Next i
+    On Error GoTo Done
+    If eW <= 0 Or eW > w1 Or eH <= 0 Or n * eH > h1 Then eW = w1: eH = h1 / n
+    padW = w1 - eW
+    padH = h1 - n * eH
+    If padH > 8 Then padH = 8
+    If padH < 4 Then padH = 4
+
+    ' horizontal layout (used for 2 columns) spaces entries differently
+    eWh = eW: gapH = 12
+    If n >= 2 Then
+        On Error Resume Next
+        ch.Legend.Position = xlLegendPositionTop
+        ch.Legend.IncludeInLayout = False
+        ch.Refresh
+        DoEvents
+        eWh = 0
+        For i = 1 To ch.Legend.LegendEntries.Count
+            If ch.Legend.LegendEntries(i).Width > eWh Then eWh = ch.Legend.LegendEntries(i).Width
+        Next i
+        If ch.Legend.LegendEntries(2).Top = ch.Legend.LegendEntries(1).Top Then
+            gapH = ch.Legend.LegendEntries(2).Left - ch.Legend.LegendEntries(1).Left - eWh
+        End If
+        ch.Legend.Position = xlLegendPositionRight
+        ch.Legend.IncludeInLayout = False
+        On Error GoTo Done
+        If eWh <= 0 Then eWh = eW
+        If gapH < 4 Or gapH > 40 Then gapH = 12
+    End If
+    kMax = n: If kMax > 2 Then kMax = 2
+    yHi0 = ch.Axes(xlValue).MaximumScale
+
+    For iter = 0 To 3
+        yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
+        bSc = 2147483647
+        For k = 1 To kMax
+            rws = -Int(-n / k)
+            If k = 1 Then lw = eW + padW Else lw = k * eWh + (k - 1) * gapH + padW + 4
+            lh = rws * eH + padH + 1
+            If lw <= pW - 2 * insX And lh <= pH - 2 * insY Then
+                For corner = 0 To 3                  ' 0 TR, 1 TL, 2 BR, 3 BL
+                    If corner Mod 2 = 0 Then lx = pL + pW - insX - lw Else lx = pL + insX
+                    If corner < 2 Then ly = pT + insY Else ly = pT + pH - insY - lh
+                    hits = BarHits(lx, ly, lw, lh, nB, bx0, bx1, by0, by1, nCat, yLo, yHi, pL, pT, pW, pH)
+                    sc = hits * 1000 + (k - 1) * 4 + corner
+                    If sc < bSc Then
+                        bSc = sc: bHits = hits: bK = k: bC = corner: bW = lw: bH = lh: bX = lx: bY = ly
+                    End If
+                Next corner
+            End If
+        Next k
+        If bSc = 2147483647 Then GoTo Outside    ' legend too big for any layout
+        If bHits = 0 Then Exit For
+        If iter < 3 Then                          ' room at the top
+            With ch.Axes(xlValue)
+                .MaximumScale = yHi + .MajorUnit
+            End With
+        End If
+    Next iter
+    If bHits > 0 Then GoTo Outside              ' no corner is clear at any level
+
+    ' a 2-column legend only wraps into rows in horizontal (top) layout
+    If bK > 1 Then
+        ch.Legend.Position = xlLegendPositionTop
+        ch.Legend.IncludeInLayout = False
+        ch.Refresh
+    End If
+    With ch.Legend
+        .Width = bW
+        .Height = bH
+        .Left = bX
+        .Top = bY
+    End With
+    legCorner = bC
+    Exit Sub
+
+Outside:
+    ' legend outside the plot on the right, chart widened (and made taller if
+    ' needed) first, sized from the longest series name and widened until no
+    ' name wraps
+    Dim fs As Double, maxLen As Long, nm As String
+    Dim wrapTry As Long, hMinE As Double, hMaxE As Double, hEnt As Double
+    ch.Axes(xlValue).MaximumScale = yHi0
+    fs = lineH / LG_LINESP
+    For j = 1 To ch.SeriesCollection.Count
+        nm = ch.SeriesCollection(j).Name
+        If Len(nm) > maxLen Then maxLen = Len(nm)
+    Next j
+    lw = 30 + maxLen * fs * 0.52
+    lh = n * fs * LG_LINESP + 12
+    extraW = lw + 24
+    If pT + lh + 8 > H Then extraH = pT + lh + 8 - H
+    ch.Parent.Width = W + extraW
+    ch.Parent.Height = H + extraH
+    For j = 1 To 2
+        With ch.PlotArea
+            .InsideLeft = pL: .InsideTop = pT: .InsideWidth = pW: .InsideHeight = pH
+        End With
+    Next j
+    With ch.Legend
+        .Position = xlLegendPositionRight
+        .IncludeInLayout = False
+        .Left = pL + pW + 18
+        .Top = pT
+        .Width = lw
+        .Height = lh
+    End With
+    For wrapTry = 1 To 4
+        ch.Refresh
+        DoEvents
+        hMinE = 0: hMaxE = 0
+        On Error Resume Next
+        For j = 1 To ch.Legend.LegendEntries.Count
+            hEnt = ch.Legend.LegendEntries(j).Height
+            If hMinE = 0 Or hEnt < hMinE Then hMinE = hEnt
+            If hEnt > hMaxE Then hMaxE = hEnt
+        Next j
+        On Error GoTo Done
+        If hMinE <= 0 Or hMaxE < hMinE * 1.5 Then Exit For
+        lw = lw * 1.15
+        extraW = lw + 24
+        ch.Parent.Width = W + extraW
+        With ch.Legend
+            .Left = pL + pW + 18
+            .Width = lw
+            .Height = lh
+        End With
+    Next wrapTry
+    legCorner = 4
+Done:
+End Sub
+
+' Number of bars the legend box (plus a 2 pt margin) would cover.
+Private Function BarHits(ByVal lx As Double, ByVal ly As Double, ByVal lw As Double, _
+                         ByVal lh As Double, ByVal nB As Long, bx0() As Double, bx1() As Double, _
+                         by0() As Double, by1() As Double, ByVal nCat As Long, _
+                         ByVal yLo As Double, ByVal yHi As Double, ByVal pL As Double, _
+                         ByVal pT As Double, ByVal pW As Double, ByVal pH As Double) As Long
+    Const PAD As Double = 2
+    Dim i As Long, xa As Double, xb As Double, ya As Double, yb As Double
+    If yHi <= yLo Then Exit Function
+    For i = 1 To nB
+        xa = pL + (bx0(i) - 0.5) / nCat * pW
+        xb = pL + (bx1(i) - 0.5) / nCat * pW
+        ya = pT + (1 - (by1(i) - yLo) / (yHi - yLo)) * pH      ' bar top on screen
+        yb = pT + (1 - (by0(i) - yLo) / (yHi - yLo)) * pH      ' bar bottom
+        If xb > lx - PAD And xa < lx + lw + PAD And yb > ly - PAD And ya < ly + lh + PAD Then
+            BarHits = BarHits + 1
+        End If
+    Next i
+End Function
+
+' Align the legend to its corner of the plot box as finally drawn (or beside
+' it for corner 4), using the size Excel actually gave it.
+' corner: 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left, 4 outside right.
+Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, ByVal H As Double)
+    Dim insX As Double, insY As Double, p As Long
+    On Error Resume Next
+    ch.Refresh
+    DoEvents
+    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
+    insY = (LG_TOP - PA_TOP) * H
+    For p = 1 To 2
+        With ch.PlotArea
+            .InsideLeft = PA_LEFT * W
+            .InsideTop = PA_TOP * H
+            .InsideWidth = PA_WIDTH * W
+            .InsideHeight = PA_HEIGHT * H
+        End With
+    Next p
+    With ch.Legend
+        If corner = 4 Then
+            .Left = ch.PlotArea.InsideLeft + ch.PlotArea.InsideWidth + 18
+            .Top = ch.PlotArea.InsideTop
+            ch.Refresh
+            Exit Sub
+        End If
+        If corner Mod 2 = 0 Then
+            .Left = ch.PlotArea.InsideLeft + ch.PlotArea.InsideWidth - insX - .Width
+        Else
+            .Left = ch.PlotArea.InsideLeft + insX
+        End If
+        If corner < 2 Then
+            .Top = ch.PlotArea.InsideTop + insY
+        Else
+            .Top = ch.PlotArea.InsideTop + ch.PlotArea.InsideHeight - insY - .Height
+        End If
+    End With
+    ch.Refresh
 End Sub

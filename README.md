@@ -60,6 +60,13 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 - The legend goes in a corner where it covers no data (1 or 2 columns, raising the axes a
   step if needed), or outside the plot on the right when nothing fits.
 
+## Bar Graph
+
+Select a block with a `bargraph` tag (and optionally `xlabels`). Each block of values is a
+series (legend entry); each row within a block is a group on the x axis. The legend is
+placed like the Line Graph's: a clear corner (1 or 2 columns, raising the axis a step if
+needed), or outside the plot on the right.
+
 ## RCPT
 
 Imports a TTi CPX400DP logger CSV into the **RCPT** sheet, one row (and current chart) per
