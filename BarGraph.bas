@@ -17,6 +17,9 @@ Private Const LG_TOP        As Double = 0.086
 Private Const LG_LINESP     As Double = 1.45
 Private Const TICK_OFFSET   As Long = 20
 Private Const GAP_GROUPED   As Long = 150
+' colour scheme cell on the Buttons sheet of this workbook: standard / darkening pairs
+Private Const SETTINGS_SHEET As String = "Buttons"
+Private Const SCHEME_CELL    As String = "G3"
 Private Const GAP_SINGLE    As Long = 80
 ' =========================================================
 
@@ -30,7 +33,7 @@ Sub GenerateStrengthBarGraph()
     Dim inBlk As Boolean
     Dim b As Variant, c As Variant, dv As Double, de As Double
     Dim yTitle As String, maxVal As Double
-    Dim co As ChartObject, ch As Chart, cols As Variant
+    Dim co As ChartObject, ch As Chart, clr() As Long
     Dim vRng As Range, eRng As Range, catRng As Range
     Dim W As Double, H As Double, sc As Double
     Dim fsT As Double, fsA As Double, fsL As Double
@@ -144,8 +147,7 @@ Sub GenerateStrengthBarGraph()
         ch.SeriesCollection(1).Delete
     Loop
 
-    cols = Array(RGB(0, 114, 189), RGB(217, 83, 25), RGB(237, 177, 32), _
-                 RGB(126, 47, 142), RGB(119, 172, 48), RGB(77, 190, 238), RGB(162, 20, 47))
+    clr = BarColors(ReadScheme(), nBlk)
 
     '--- 7. one series per block, wired to the source cells ----------------
     For j = 1 To nBlk
@@ -160,7 +162,7 @@ Sub GenerateStrengthBarGraph()
             .Values = vRng
             If Not catRng Is Nothing Then .XValues = catRng
             .Format.Fill.Visible = msoTrue
-            .Format.Fill.ForeColor.RGB = cols((j - 1) Mod 7)
+            .Format.Fill.ForeColor.RGB = clr(j)
             .Format.Line.Visible = msoTrue
             .Format.Line.ForeColor.RGB = RGB(0, 0, 0)
             .Format.Line.Weight = wAX
@@ -599,3 +601,43 @@ Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, B
     End With
     ch.Refresh
 End Sub
+
+' Buttons!G3: "darkening pairs" (any case); anything else, a blank cell or a
+' missing sheet means standard.
+Private Function ReadScheme() As String
+    Dim ws As Worksheet
+    ReadScheme = "standard"
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    If LCase$(CellText(ws.Range(SCHEME_CELL).Value)) = "darkening pairs" Then ReadScheme = "pairs"
+End Function
+
+' One fill colour per series (1..n).
+'   standard - MATLAB default order, repeating after 7
+'   pairs    - light blue, light red, blue, red, dark blue, dark red, repeating;
+'              blue and red are the standard ones, light = halfway to white,
+'              dark = 60 % of the colour
+Private Function BarColors(scheme As String, n As Long) As Long()
+    Dim c() As Long, pal As Variant, i As Long
+    Const BLUE_R As Long = 0, BLUE_G As Long = 114, BLUE_B As Long = 189
+    Const RED_R As Long = 217, RED_G As Long = 83, RED_B As Long = 25
+
+    If n < 1 Then n = 1
+    ReDim c(1 To n)
+    If scheme = "pairs" Then
+        pal = Array(RGB((BLUE_R + 255) \ 2, (BLUE_G + 255) \ 2, (BLUE_B + 255) \ 2), _
+                    RGB((RED_R + 255) \ 2, (RED_G + 255) \ 2, (RED_B + 255) \ 2), _
+                    RGB(BLUE_R, BLUE_G, BLUE_B), RGB(RED_R, RED_G, RED_B), _
+                    RGB(BLUE_R * 0.6, BLUE_G * 0.6, BLUE_B * 0.6), _
+                    RGB(RED_R * 0.6, RED_G * 0.6, RED_B * 0.6))
+    Else
+        pal = Array(RGB(0, 114, 189), RGB(217, 83, 25), RGB(237, 177, 32), _
+                    RGB(126, 47, 142), RGB(119, 172, 48), RGB(77, 190, 238), RGB(162, 20, 47))
+    End If
+    For i = 1 To n
+        c(i) = pal((i - 1) Mod (UBound(pal) + 1))
+    Next i
+    BarColors = c
+End Function

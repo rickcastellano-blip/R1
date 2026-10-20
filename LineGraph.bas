@@ -21,12 +21,11 @@ Private Const DO_LABELS     As Boolean = True    ' xgrapher: dolabels
 Private Const LABEL_FS      As Double = 10       ' point-label font size (pt, not scaled)
 ' settings cells on the Buttons sheet of this workbook
 Private Const SETTINGS_SHEET As String = "Buttons"
-' each setting is the cell just below its header on that sheet, found by
-' the header text, so the block can be moved anywhere
-Private Const LINE_HDR       As String = "Line"          ' 1 = connecting lines, 0 = markers only
-Private Const SCHEME_HDR     As String = "Color scheme"  ' standard / stoplight / green->red
-Private Const MARKER_HDR     As String = "Marker Size"   ' pt (2-72); blank = default
-Private Const LINEW_HDR      As String = "Line Width"    ' line + marker outline, pt; blank = default
+' settings cells (fixed addresses) on that sheet
+Private Const LINE_CELL      As String = "F7"     ' 1 = connecting lines, 0 = markers only
+Private Const SCHEME_CELL    As String = "G7"     ' standard / stoplight / green->red
+Private Const MARKER_CELL    As String = "H7"     ' marker size in pt (2-72); blank = default
+Private Const LINEW_CELL     As String = "I7"     ' line + marker outline width in pt; blank = default
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range
@@ -549,10 +548,10 @@ Private Function CellText(v As Variant) As String
     If Not IsError(v) Then CellText = Trim$(CStr(v))
 End Function
 
-' Line: 0 = markers only, anything else (1, blank) = connecting lines.
-' Color scheme: "stoplight", "green->red" (anything starting "green"), else standard.
-' Marker Size: in points, 2-72; blank or text keeps the default size.
-' Line Width: in points (0.25-10) of the connecting line and marker outline;
+' F7 (Line): 0 = markers only, anything else (1, blank) = connecting lines.
+' G7 (Color scheme): "stoplight", "green->red" (anything starting "green"), else standard.
+' H7 (Marker Size): in points, 2-72; blank or text keeps the default size.
+' I7 (Line Width): in points (0.25-10) of the connecting line and marker outline;
 '     blank or text keeps the defaults.
 ' Missing sheet or cells fall back to lines + standard + default size.
 Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef mSize As Double, _
@@ -564,46 +563,32 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef
     On Error GoTo 0
     If ws Is Nothing Then Exit Sub
 
-    v = SettingValue(ws, LINE_HDR)
+    v = ws.Range(LINE_CELL).Value
     If IsNum(v) Then
         If CDbl(v) = 0 Then useLine = False
     End If
 
-    v = LCase$(CellText(SettingValue(ws, SCHEME_HDR)))
+    v = LCase$(CellText(ws.Range(SCHEME_CELL).Value))
     If v = "stoplight" Then
         scheme = "stoplight"
     ElseIf Left$(v, 5) = "green" Then
         scheme = "gradient"
     End If
 
-    v = SettingValue(ws, MARKER_HDR)
+    v = ws.Range(MARKER_CELL).Value
     If IsNum(v) Then
         mSize = Round(CDbl(v), 0)
         If mSize < 2 Then mSize = 2
         If mSize > 72 Then mSize = 72            ' Excel's marker size range
     End If
 
-    v = SettingValue(ws, LINEW_HDR)
+    v = ws.Range(LINEW_CELL).Value
     If IsNum(v) Then
         lineW = CDbl(v)
         If lineW < 0.25 Then lineW = 0.25
         If lineW > 10 Then lineW = 10
     End If
 End Sub
-
-' Value in the cell below the header cell whose text is hdr (whole-cell,
-' any case, surrounding spaces ignored); Empty if there is no such header.
-Private Function SettingValue(ws As Worksheet, hdr As String) As Variant
-    Dim cel As Range
-    For Each cel In ws.UsedRange.Cells
-        If VarType(cel.Value) = vbString Then
-            If StrComp(Trim$(cel.Value), hdr, vbTextCompare) = 0 Then
-                SettingValue = cel.Offset(1, 0).Value
-                Exit Function
-            End If
-        End If
-    Next cel
-End Function
 
 ' One colour per series (1..n).
 '   standard  - xgrapher color1 palette, repeating after 13

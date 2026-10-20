@@ -34,7 +34,9 @@ Read README.md first: it maps every button to its macro, Excel module, file and 
   per-import summary.
 - Excel module names equal file names (BarGraph, LineGraph, RCPTImport, RCPTRecovered,
   NTBuild492, NTBuild492Recovered); keep the button macro names stable so existing button assignments work.
-- Line Graph settings are found by header text on the Buttons sheet, never by fixed cell.
+- Graph settings are fixed cells on the Buttons sheet (no header search, by the user's
+  choice): Bar Graph colour scheme G3; Line Graph Line F7, Color scheme G7, Marker Size H7,
+  Line Width I7. If the user moves them, update the constants.
 - Numbers written into worksheet formulas go through `Num()` (locale-safe decimal point).
 
 ## Domain notes

@@ -47,15 +47,15 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   A row with one value or `#N/A` stays in the series with no point.
 - Point labels: the first text column right of Y (or right of numeric ±Y / ±X error-bar
   columns). An empty column stops the search.
-- Settings are read from the **Buttons** sheet, from the cell below each header (the block
-  can be moved anywhere):
+- Settings are fixed cells on the **Buttons** sheet (if they move, the constants at the top
+  of LineGraph must change):
 
-  | Header | Value |
+  | Cell | Setting |
   |---|---|
-  | Line | 1 = connecting lines, 0 = markers only |
-  | Color scheme | standard, stoplight, green→red |
-  | Marker Size | points (2–72); blank = default |
-  | Line Width | points (0.25–10), line and marker outline; blank = default |
+  | F7 | Line: 1 = connecting lines, 0 = markers only |
+  | G7 | Color scheme: standard, stoplight, green→red |
+  | H7 | Marker Size: points (2–72); blank = default |
+  | I7 | Line Width: points (0.25–10), line and marker outline; blank = default |
 
 - The legend goes in a corner where it covers no data (1 or 2 columns, raising the axes a
   step if needed), or outside the plot on the right when nothing fits.
@@ -63,7 +63,9 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 ## Bar Graph
 
 Select a block with a `bargraph` tag (and optionally `xlabels`). Each block of values is a
-series (legend entry); each row within a block is a group on the x axis. The legend is
+series (legend entry); each row within a block is a group on the x axis. The colour scheme is
+**Buttons!G3**: standard, or darkening pairs (light blue, light red, blue, red, dark blue,
+dark red). The legend is
 placed like the Line Graph's: a clear corner (1 or 2 columns, raising the axis a step if
 needed), or outside the plot on the right.
 
