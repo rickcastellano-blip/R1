@@ -286,8 +286,11 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
                           Type:=xlErrorBarTypeCustom, Amount:=e1Rng, MinusValues:=e1Rng
                 With .ErrorBars
                     .EndStyle = xlCap
+                    .Format.Line.Visible = msoTrue
                     .Format.Line.ForeColor.RGB = clr(j)
                     .Format.Line.Weight = errW
+                    Debug.Print "LG errbar s" & j & " lwSet=" & lwSet & " useLine=" & useLine & _
+                                " errW=" & errW & " got=" & .Format.Line.Weight
                 End With
             End If
             If hasE2 And lblC(j) <> e1C And lblC(j) <> e2C Then
@@ -295,8 +298,11 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
                           Type:=xlErrorBarTypeCustom, Amount:=e2Rng, MinusValues:=e2Rng
                 With .ErrorBars
                     .EndStyle = xlCap
+                    .Format.Line.Visible = msoTrue
                     .Format.Line.ForeColor.RGB = clr(j)
                     .Format.Line.Weight = errW
+                    Debug.Print "LG errbar s" & j & " lwSet=" & lwSet & " useLine=" & useLine & _
+                                " errW=" & errW & " got=" & .Format.Line.Weight
                 End With
             End If
         End With
