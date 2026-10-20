@@ -90,7 +90,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim b As Variant, c As Variant
     Dim tag As String, xLog As Boolean, yLog As Boolean
     Dim xTitle As String, yTitle As String
-    Dim hasE1 As Boolean, hasE2 As Boolean, doE1 As Boolean, doE2 As Boolean
+    Dim hasE1 As Boolean, hasE2 As Boolean
     Dim minX As Double, maxX As Double, minY As Double, maxY As Double
     Dim gotX As Boolean, gotY As Boolean
     Dim dv As Double
@@ -98,7 +98,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim xRng As Range, yRng As Range, e1Rng As Range, e2Rng As Range
     Dim W As Double, H As Double, sc As Double
     Dim fsT As Double, fsA As Double, fsL As Double
-    Dim wAX As Double, wPL As Double, msz As Double
+    Dim wAX As Double, wPL As Double, msz As Double, errW As Double
     Dim axMax As Double, axStep As Double, axMin As Double
     Dim lblC() As Long, fsTx As Double, legCorner As Long, legExtraW As Double, legExtraH As Double
     Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
@@ -210,6 +210,15 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
 
     '--- 4b. line / colour settings from the Buttons sheet ----------------
     ReadSettings useLine, scheme, mSet, lwSet
+    ' error bars use the marker outline width: Line Width (I7) when set, else
+    ' the plot line width, or Excel's 0.75 pt default border for markers only
+    If lwSet > 0 Then
+        errW = lwSet
+    ElseIf useLine Then
+        errW = wPL
+    Else
+        errW = 0.75
+    End If
     If mSet > 0 Then msz = mSet               ' Marker Size setting overrides the default
     clr = SeriesColors(scheme, nBlk)
 
@@ -235,6 +244,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     For j = 1 To nBlk
         Set xRng = tws.Cells(blkRow(j), xC).Resize(rc(j), 1)
         Set yRng = tws.Cells(blkRow(j), yC).Resize(rc(j), 1)
+        Set e1Rng = tws.Cells(blkRow(j), e1C).Resize(rc(j), 1)
+        Set e2Rng = tws.Cells(blkRow(j), e2C).Resize(rc(j), 1)
         With ch.SeriesCollection.NewSeries
             If Len(blkLab(j)) > 0 Then
                 .Name = "='" & tws.Name & "'!" & tws.Cells(blkRow(j), nameC).Address(True, True)
@@ -269,45 +280,26 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
                     128 + ((clr(j) \ &H100&) And &HFF&) \ 2, _
                     128 + ((clr(j) \ &H10000) And &HFF&) \ 2)
             End If
+            ' col 3 = +/- Y error, col 4 = +/- X error (xgrapher errorbar signature)
+            If hasE1 And lblC(j) <> e1C Then
+                .ErrorBar Direction:=xlY, Include:=xlBoth, _
+                          Type:=xlErrorBarTypeCustom, Amount:=e1Rng, MinusValues:=e1Rng
+                With .ErrorBars
+                    .EndStyle = xlCap
+                    .Format.Line.ForeColor.RGB = clr(j)
+                    .Format.Line.Weight = errW
+                End With
+            End If
+            If hasE2 And lblC(j) <> e1C And lblC(j) <> e2C Then
+                .ErrorBar Direction:=xlX, Include:=xlBoth, _
+                          Type:=xlErrorBarTypeCustom, Amount:=e2Rng, MinusValues:=e2Rng
+                With .ErrorBars
+                    .EndStyle = xlCap
+                    .Format.Line.ForeColor.RGB = clr(j)
+                    .Format.Line.Weight = errW
+                End With
+            End If
         End With
-    Next j
-
-    ' Excel draws a series' error bars under its own markers, so the bars go
-    ' on copies of the series (no line, no marker) added after all of them,
-    ' which puts the bars on top of every marker. Their legend entries are
-    ' removed when the legend is set up.
-    ' col 3 = +/- Y error, col 4 = +/- X error (xgrapher errorbar signature)
-    For j = 1 To nBlk
-        doE1 = hasE1 And lblC(j) <> e1C
-        doE2 = hasE2 And lblC(j) <> e1C And lblC(j) <> e2C
-        If doE1 Or doE2 Then
-            Set e1Rng = tws.Cells(blkRow(j), e1C).Resize(rc(j), 1)
-            Set e2Rng = tws.Cells(blkRow(j), e2C).Resize(rc(j), 1)
-            With ch.SeriesCollection.NewSeries
-                .XValues = tws.Cells(blkRow(j), xC).Resize(rc(j), 1)
-                .Values = tws.Cells(blkRow(j), yC).Resize(rc(j), 1)
-                .MarkerStyle = xlMarkerStyleNone
-                .Format.Line.Visible = msoFalse
-                If doE1 Then
-                    .ErrorBar Direction:=xlY, Include:=xlBoth, _
-                              Type:=xlErrorBarTypeCustom, Amount:=e1Rng, MinusValues:=e1Rng
-                    With .ErrorBars
-                        .EndStyle = xlCap
-                        .Format.Line.ForeColor.RGB = clr(j)
-                        .Format.Line.Weight = wAX
-                    End With
-                End If
-                If doE2 Then
-                    .ErrorBar Direction:=xlX, Include:=xlBoth, _
-                              Type:=xlErrorBarTypeCustom, Amount:=e2Rng, MinusValues:=e2Rng
-                    With .ErrorBars
-                        .EndStyle = xlCap
-                        .Format.Line.ForeColor.RGB = clr(j)
-                        .Format.Line.Weight = wAX
-                    End With
-                End If
-            End With
-        End If
     Next j
 
     '--- 7. chart area / fonts --------------------------------------------
@@ -413,9 +405,6 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
 
     '--- 9. legend --------------------------------------------------------
     ch.HasLegend = True
-    For j = ch.Legend.LegendEntries.Count To nBlk + 1 Step -1
-        ch.Legend.LegendEntries(j).Delete            ' the error-bar copies
-    Next j
     With ch.Legend
         .Position = xlLegendPositionCorner
         .IncludeInLayout = False
@@ -880,7 +869,7 @@ Outside:
     ch.Axes(xlCategory).MaximumScale = xHi0
     ch.Axes(xlValue).MaximumScale = yHi0
     fs = lineH / LG_LINESP
-    For j = 1 To n
+    For j = 1 To ch.SeriesCollection.Count
         nm = ch.SeriesCollection(j).Name
         If Len(nm) > maxLen Then maxLen = Len(nm)
     Next j
