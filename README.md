@@ -66,8 +66,8 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 
 Select a block with a `bargraph` tag (and optionally `xlabels`). Each block of values is a
 series (legend entry); each row within a block is a group on the x axis. The colour scheme is
-**Buttons!G3**: standard, or darkening pairs (light blue, light red, blue, red, dark blue,
-dark red). The legend is
+**Buttons!G3**: standard (the xgrapher.m colour list, as in the Line Graph), or darkening
+pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red). The legend is
 placed like the Line Graph's: a clear corner (1 or 2 columns, raising the axis a step if
 needed), or outside the plot on the right.
 

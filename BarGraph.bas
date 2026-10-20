@@ -615,14 +615,14 @@ Private Function ReadScheme() As String
 End Function
 
 ' One fill colour per series (1..n).
-'   standard - MATLAB default order, repeating after 7
+'   standard - the xgrapher.m color1 list (as Line Graph), repeating after 13
 '   pairs    - light blue, light red, blue, red, dark blue, dark red, repeating;
 '              blue and red are the standard ones, light = halfway to white,
 '              dark = 60 % of the colour
 Private Function BarColors(scheme As String, n As Long) As Long()
     Dim c() As Long, pal As Variant, i As Long
-    Const BLUE_R As Long = 0, BLUE_G As Long = 114, BLUE_B As Long = 189
-    Const RED_R As Long = 217, RED_G As Long = 83, RED_B As Long = 25
+    Const BLUE_R As Long = 4, BLUE_G As Long = 65, BLUE_B As Long = 215
+    Const RED_R As Long = 225, RED_G As Long = 0, RED_B As Long = 21
 
     If n < 1 Then n = 1
     ReDim c(1 To n)
@@ -633,8 +633,10 @@ Private Function BarColors(scheme As String, n As Long) As Long()
                     RGB(BLUE_R * 0.6, BLUE_G * 0.6, BLUE_B * 0.6), _
                     RGB(RED_R * 0.6, RED_G * 0.6, RED_B * 0.6))
     Else
-        pal = Array(RGB(0, 114, 189), RGB(217, 83, 25), RGB(237, 177, 32), _
-                    RGB(126, 47, 142), RGB(119, 172, 48), RGB(77, 190, 238), RGB(162, 20, 47))
+        pal = Array(RGB(4, 65, 215), RGB(225, 0, 21), RGB(20, 20, 20), RGB(23, 105, 14), _
+                    RGB(5, 66, 105), RGB(140, 87, 5), RGB(115, 5, 5), RGB(50, 21, 79), _
+                    RGB(36, 186, 120), RGB(184, 93, 33), RGB(237, 143, 136), _
+                    RGB(224, 219, 110), RGB(157, 162, 248))
     End If
     For i = 1 To n
         c(i) = pal((i - 1) Mod (UBound(pal) + 1))
