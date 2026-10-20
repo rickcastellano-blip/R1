@@ -45,8 +45,10 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   of X, on the series' first row. Axis titles are the row below the tag (linked to the cells).
 - A row where X **and** Y are both blank starts a new series; two such rows end the graph.
   A row with one value or `#N/A` stays in the series with no point.
-- Point labels: the first text column right of Y (or right of numeric ±Y / ±X error-bar
-  columns). An empty column stops the search.
+- Columns right of Y: numeric ±Y, then ±X error bars (drawn in the series colour), and
+  point labels in the first text column. Only columns up to the first column that is
+  blank over all the graph's data rows are used, so a table beyond a blank column is
+  never read as error bars or labels.
 - Settings are fixed cells on the **Buttons** sheet (if they move, the constants at the top
   of LineGraph must change):
 

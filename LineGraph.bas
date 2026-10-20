@@ -83,7 +83,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
                            ByVal f As Range, ByVal gIdx As Long, ByRef nextTop As Double)
     Dim tagR As Long, tagC As Long
     Dim xC As Long, yC As Long, e1C As Long, e2C As Long, nameC As Long
-    Dim r As Long, j As Long, lastR As Long, p As Long
+    Dim r As Long, j As Long, lastR As Long, p As Long, endR As Long, stopC As Long
     Dim blkRow() As Long, rc() As Long, blkLab() As String
     Dim nBlk As Long, nPts As Long
     Dim inBlk As Boolean
@@ -166,6 +166,17 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Next r
     If nBlk = 0 Then MsgBox "No numeric X/Y pairs found below the tag in " & _
                             f.Address(False, False) & ".", vbExclamation: Exit Sub
+    ' Columns right of Y (+/-Y, +/-X, labels) count only up to the first column
+    ' that is blank over all the graph's data rows, so a neighbouring table
+    ' beyond a blank column is never read as error bars or labels.
+    endR = blkRow(nBlk) + rc(nBlk) - 1
+    stopC = e1C
+    Do While stopC <= e2C + 1
+        If Application.CountA(tws.Range(tws.Cells(blkRow(1), stopC), tws.Cells(endR, stopC))) = 0 Then Exit Do
+        stopC = stopC + 1
+    Loop
+    If e1C >= stopC Then hasE1 = False
+    If e2C >= stopC Then hasE2 = False
     For j = 1 To nBlk
         If rc(j) > nPts Then nPts = rc(j)
         ' text labels sit in the first non-numeric column after X,Y (xgrapher:
@@ -180,7 +191,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
             lblC(j) = e2C
         ElseIf ColIsBlank(tws, blkRow(j), rc(j), e2C) Then
             lblC(j) = 0
-        ElseIf Application.CountA(tws.Cells(blkRow(j), e2C + 1).Resize(rc(j), 1)) > 0 Then
+        ElseIf e2C + 1 < stopC And _
+               Application.CountA(tws.Cells(blkRow(j), e2C + 1).Resize(rc(j), 1)) > 0 Then
             lblC(j) = e2C + 1
         End If
     Next j
@@ -272,6 +284,11 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
             If hasE2 And lblC(j) <> e1C And lblC(j) <> e2C Then
                 .ErrorBar Direction:=xlX, Include:=xlBoth, _
                           Type:=xlErrorBarTypeCustom, Amount:=e2Rng, MinusValues:=e2Rng
+                With .ErrorBars
+                    .EndStyle = xlCap
+                    .Format.Line.ForeColor.RGB = clr(j)
+                    .Format.Line.Weight = wAX
+                End With
             End If
         End With
     Next j
