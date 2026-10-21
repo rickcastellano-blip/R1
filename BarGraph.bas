@@ -32,7 +32,7 @@ Sub GenerateStrengthBarGraph()
     Dim nBlk As Long, nRow As Long, nLab As Long
     Dim inBlk As Boolean
     Dim b As Variant, c As Variant, dv As Double, de As Double
-    Dim yTitle As String, maxVal As Double
+    Dim yTitle As String, maxVal As Double, gotNum As Boolean
     Dim co As ChartObject, ch As Chart, clr() As Long
     Dim vRng As Range, eRng As Range, catRng As Range
     Dim W As Double, H As Double, sc As Double
@@ -86,10 +86,13 @@ Sub GenerateStrengthBarGraph()
     ReDim blkLab(1 To lastR - tagR + 2)
     ReDim rc(1 To lastR - tagR + 2)
     inBlk = False
+    ' A block runs over consecutive numeric or error (#N/A) values; an error
+    ' is a group with no bar, so the rows still line up with the x labels.
+    ' A blank (or text) cell ends the block.
     For r = tagR + 2 To lastR
         b = tws.Cells(r, valC).Value
         c = tws.Cells(r, errC).Value
-        If IsNum(b) Then
+        If IsNum(b) Or IsError(b) Then
             If Not inBlk Then
                 nBlk = nBlk + 1
                 blkRow(nBlk) = r
@@ -98,13 +101,17 @@ Sub GenerateStrengthBarGraph()
                 inBlk = True
             End If
             rc(nBlk) = rc(nBlk) + 1
-            dv = CDbl(b): de = 0
-            If IsNum(c) Then de = CDbl(c)
-            If dv + de > maxVal Then maxVal = dv + de
+            If IsNum(b) Then
+                gotNum = True
+                dv = CDbl(b): de = 0
+                If IsNum(c) Then de = CDbl(c)
+                If dv + de > maxVal Then maxVal = dv + de
+            End If
         Else
             inBlk = False
         End If
     Next r
+    If Not gotNum Then nBlk = 0
     If nBlk = 0 Then MsgBox "No numeric data found below the tag.", vbExclamation: Exit Sub
     For j = 1 To nBlk
         If rc(j) > nRow Then nRow = rc(j)
