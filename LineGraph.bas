@@ -86,7 +86,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim r As Long, j As Long, lastR As Long, p As Long, endR As Long, stopC As Long
     Dim blkRow() As Long, rc() As Long, blkLab() As String
     Dim nBlk As Long, nPts As Long
-    Dim inBlk As Boolean
+    Dim inBlk As Boolean, firstR As Long
     Dim b As Variant, c As Variant
     Dim tag As String, xLog As Boolean, yLog As Boolean
     Dim xTitle As String, yTitle As String
@@ -132,22 +132,25 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     inBlk = False
     ' A series runs until a row where X and Y are BOTH blank; a row with only
     ' one value (or #N/A) stays in the series and simply has no point. Each
-    ' series range spans its first to last row with both values numeric.
+    ' series range spans its first row (where its name is) to its last row
+    ' with both values numeric; a block with no numeric pair is no series.
     For r = tagR + 2 To lastR
         b = tws.Cells(r, xC).Value
         c = tws.Cells(r, yC).Value
         If IsTag(b) Then Exit For                    ' the next graph starts here
         If IsBlankValue(b) And IsBlankValue(c) Then
             inBlk = False                            ' X and Y both blank: new series
+            firstR = 0
             nBlank = nBlank + 1
             If nBlank >= 2 Then Exit For             ' two blank rows end the graph
         Else
             nBlank = 0
+            If firstR = 0 Then firstR = r            ' the block's first row
             If IsNum(b) And IsNum(c) Then
                 If Not inBlk Then
                     nBlk = nBlk + 1
-                    blkRow(nBlk) = r
-                    blkLab(nBlk) = CellText(tws.Cells(r, nameC).Value)
+                    blkRow(nBlk) = firstR
+                    blkLab(nBlk) = CellText(tws.Cells(firstR, nameC).Value)
                     inBlk = True
                 End If
                 rc(nBlk) = r - blkRow(nBlk) + 1      ' through this row
