@@ -69,7 +69,8 @@ series (legend entry); each row within a block is a group on the x axis. A blank
 block; `#N/A` stays in it as a group with no bar. The series name is in the column left of
 the tag, on the block's first row. The colour scheme is
 **Buttons!G3**: standard (the xgrapher.m colour list, as in the Line Graph), or darkening
-pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red). The legend is
+pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red;
+just blue and red when there is only one pair). The legend is
 placed like the Line Graph's: a clear corner (1 or 2 columns, raising the axis a step if
 needed), or outside the plot on the right.
 

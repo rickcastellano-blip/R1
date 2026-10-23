@@ -628,7 +628,8 @@ End Function
 '   standard - the xgrapher.m color1 list (as Line Graph), repeating after 13
 '   pairs    - light blue, light red, blue, red, dark blue, dark red, repeating;
 '              blue and red are the standard ones, light = halfway to white,
-'              dark = 60 % of the colour
+'              dark = 60 % of the colour; a single pair (1-2 series) is
+'              the standard blue and red
 Private Function BarColors(scheme As String, n As Long) As Long()
     Dim c() As Long, pal As Variant, i As Long
     Const BLUE_R As Long = 4, BLUE_G As Long = 65, BLUE_B As Long = 215
@@ -647,6 +648,12 @@ Private Function BarColors(scheme As String, n As Long) As Long()
                     RGB(5, 66, 105), RGB(140, 87, 5), RGB(115, 5, 5), RGB(50, 21, 79), _
                     RGB(36, 186, 120), RGB(184, 93, 33), RGB(237, 143, 136), _
                     RGB(224, 219, 110), RGB(157, 162, 248))
+    End If
+    If scheme = "pairs" And n <= 2 Then
+        c(1) = pal(2)
+        If n = 2 Then c(2) = pal(3)
+        BarColors = c
+        Exit Function
     End If
     For i = 1 To n
         c(i) = pal((i - 1) Mod (UBound(pal) + 1))
