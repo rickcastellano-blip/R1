@@ -423,6 +423,9 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     If eW <= 0 Or eW > w1 Or eH <= 0 Or n * eH > h1 Then eW = w1: eH = h1 / n
     padW = w1 - eW
     padH = h1 - n * eH
+    ' Excel can report entries spread over a tall box; one line of text is
+    ' all an entry needs, so the rows are never taller than that
+    If eH > lineH Then eH = lineH
     If padH > 8 Then padH = 8
     If padH < 4 Then padH = 4
 
