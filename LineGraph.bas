@@ -201,7 +201,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Next j
 
     '--- 4. size + scaled type / line weights ------------------------------
-    W = CH_WIDTH_IN * 72: H = W / MAT_ASPECT
+    W = Px(CH_WIDTH_IN * 72): H = Px(W / MAT_ASPECT)   ' whole pixels, so every chart is the same size
     sc = W / MAT_FIG_W_PT
     fsT = Application.Max(1, Round(MAT_FS_TICKS * sc, 1))
     fsA = Application.Max(1, Round(MAT_FS_LABEL * sc, 1))
@@ -441,10 +441,10 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     co.Activate
     For p = 1 To 2
         With ch.PlotArea
-            .InsideLeft = PA_LEFT * W
-            .InsideTop = PA_TOP * H
-            .InsideWidth = PA_WIDTH * W
-            .InsideHeight = PA_HEIGHT * H
+            .InsideLeft = Px(PA_LEFT * W)
+            .InsideTop = Px(PA_TOP * H)
+            .InsideWidth = Px(PA_WIDTH * W)
+            .InsideHeight = Px(PA_HEIGHT * H)
         End With
     Next p
     ch.Legend.Left = LG_RIGHT * W - ch.Legend.Width
@@ -459,10 +459,10 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     On Error Resume Next
     For p = 1 To 2
         With ch.PlotArea
-            .InsideLeft = PA_LEFT * W
-            .InsideTop = PA_TOP * H
-            .InsideWidth = PA_WIDTH * W
-            .InsideHeight = PA_HEIGHT * H
+            .InsideLeft = Px(PA_LEFT * W)
+            .InsideTop = Px(PA_TOP * H)
+            .InsideWidth = Px(PA_WIDTH * W)
+            .InsideHeight = Px(PA_HEIGHT * H)
         End With
     Next p
     src.Select
@@ -472,7 +472,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     ch.HasTitle = False
     ch.SetElement msoElementChartTitleNone
     On Error GoTo 0
-    co.Width = W + legExtraW: co.Height = H + legExtraH   ' wider/taller only for an outside legend
+    co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
     ch.Refresh                               ' draw the final layout now
 End Sub
@@ -563,6 +563,12 @@ Private Sub NiceScale(ByVal raw As Double, ByRef axMax As Double, ByRef axStep A
     Next i
     axStep = e: axMax = e * (-Int(-raw / e))
 End Sub
+
+' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
+' Excel never has to round it differently from one chart to the next.
+Private Function Px(ByVal v As Double) As Double
+    Px = Round(v / 0.75, 0) * 0.75
+End Function
 
 ' True for a number (or numeric text); False for blank, text or an error
 ' value such as #N/A, which would otherwise stop the macro on "<> """.
@@ -745,7 +751,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         Next r
     Next j
 
-    pL = PA_LEFT * W: pT = PA_TOP * H: pW = PA_WIDTH * W: pH = PA_HEIGHT * H
+    pL = Px(PA_LEFT * W): pT = Px(PA_TOP * H): pW = Px(PA_WIDTH * W): pH = Px(PA_HEIGHT * H)
     insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
     insY = (LG_TOP - PA_TOP) * H
     ' Measure the legend as Excel lays it out on its own (one column, every
@@ -1029,13 +1035,19 @@ Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, B
     insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
     insY = (LG_TOP - PA_TOP) * H
     ' a chart widened for an outside legend can rescale the plot: put it back
-    For p = 1 To 2
+    ' Excel can adjust one side of the plot box when another is set, so it is
+    ' set until it reads back as asked (every chart gets the same plot box)
+    For p = 1 To 4
         With ch.PlotArea
-            .InsideLeft = PA_LEFT * W
-            .InsideTop = PA_TOP * H
-            .InsideWidth = PA_WIDTH * W
-            .InsideHeight = PA_HEIGHT * H
+            .InsideLeft = Px(PA_LEFT * W)
+            .InsideTop = Px(PA_TOP * H)
+            .InsideWidth = Px(PA_WIDTH * W)
+            .InsideHeight = Px(PA_HEIGHT * H)
         End With
+        If Abs(ch.PlotArea.InsideLeft - Px(PA_LEFT * W)) < 0.4 And _
+           Abs(ch.PlotArea.InsideTop - Px(PA_TOP * H)) < 0.4 And _
+           Abs(ch.PlotArea.InsideWidth - Px(PA_WIDTH * W)) < 0.4 And _
+           Abs(ch.PlotArea.InsideHeight - Px(PA_HEIGHT * H)) < 0.4 Then Exit For
     Next p
     With ch.Legend
         If corner = 4 Then                   ' outside, right of the plot
