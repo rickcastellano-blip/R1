@@ -635,18 +635,19 @@ Private Function ReadScheme() As String
     If ws Is Nothing Then Exit Function
     Select Case LCase$(CellText(ws.Range(SCHEME_CELL).Value))
         Case "darkening pairs": ReadScheme = "pairs"
-        Case "ordered triplets": ReadScheme = "triplets"
+        Case "darkening triplets": ReadScheme = "triplets"
     End Select
 End Function
 
 ' One fill colour per series (1..n).
 '   standard - the xgrapher.m color1 list (as Line Graph), repeating after 13
 '   pairs    - light blue, light red, blue, red, dark blue, dark red, repeating
-'   triplets - light blue, light red, light green, blue, red, green,
-'              dark blue, dark red, dark green, repeating
-'   Blue, red and green are the standard ones; light = halfway to white,
-'   dark = 60 % of the colour. A single pair / triplet (n up to 2 / 3) is just
-'   the standard colours.
+'   triplets - light blue, light red, light gray, blue, red, gray,
+'              dark blue, dark red, black, repeating
+'   Blue and red are the standard ones; light = halfway to white, dark = 60 %
+'   of the colour. Gray is 50 % gray, light gray halfway to white, and the
+'   darkest is the standard black. A single pair / triplet (n up to 2 / 3) is
+'   just the middle row (blue, red, gray).
 Private Function BarColors(scheme As String, n As Long) As Long()
     Dim c() As Long, pal As Variant, hues As Variant, i As Long, k As Long
     Dim hR As Long, hG As Long, hB As Long
@@ -654,7 +655,7 @@ Private Function BarColors(scheme As String, n As Long) As Long()
     If n < 1 Then n = 1
     ReDim c(1 To n)
     If scheme = "pairs" Or scheme = "triplets" Then
-        hues = Array(RGB(4, 65, 215), RGB(225, 0, 21), RGB(23, 105, 14))
+        hues = Array(RGB(4, 65, 215), RGB(225, 0, 21), RGB(128, 128, 128))
         If scheme = "pairs" Then k = 2 Else k = 3
         ReDim pal(0 To 3 * k - 1)
         For i = 0 To k - 1
@@ -665,6 +666,7 @@ Private Function BarColors(scheme As String, n As Long) As Long()
             pal(k + i) = hues(i)
             pal(2 * k + i) = RGB(hR * 0.6, hG * 0.6, hB * 0.6)
         Next i
+        If k = 3 Then pal(8) = RGB(20, 20, 20)   ' gray darkens to the standard black
         If n <= k Then                           ' a single group: the plain colours
             For i = 1 To n
                 c(i) = hues(i - 1)
