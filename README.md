@@ -70,7 +70,9 @@ block; `#N/A` stays in it as a group with no bar. The series name is in the colu
 the tag, on the block's first row. The colour scheme is
 **Buttons!G3**: standard (the xgrapher.m colour list, as in the Line Graph), or darkening
 pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red;
-just blue and red when there is only one pair). The legend is
+just blue and red when there is only one pair), or ordered triplets (the same with the
+standard green as a third colour: light blue, light red, light green, blue, red, green, dark
+blue, dark red, dark green; just blue, red, green for up to three series). The legend is
 placed like the Line Graph's: a clear corner (1 or 2 columns, raising the axis a step if
 needed), or outside the plot on the right.
 
