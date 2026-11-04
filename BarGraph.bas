@@ -645,7 +645,7 @@ End Function
 '   triplets - light blue, light red, light gray, blue, red, gray,
 '              dark blue, dark red, black, repeating
 '   Blue and red are the standard ones; light = halfway to white, dark = 60 %
-'   of the colour. Gray is 50 % gray, light gray halfway to white, and the
+'   of the colour. Gray is (96,96,96), light gray halfway to white, and the
 '   darkest is the standard black. A single pair / triplet (n up to 2 / 3) is
 '   just the middle row (blue, red, gray).
 Private Function BarColors(scheme As String, n As Long) As Long()
@@ -655,7 +655,7 @@ Private Function BarColors(scheme As String, n As Long) As Long()
     If n < 1 Then n = 1
     ReDim c(1 To n)
     If scheme = "pairs" Or scheme = "triplets" Then
-        hues = Array(RGB(4, 65, 215), RGB(225, 0, 21), RGB(128, 128, 128))
+        hues = Array(RGB(4, 65, 215), RGB(225, 0, 21), RGB(96, 96, 96))
         If scheme = "pairs" Then k = 2 Else k = 3
         ReDim pal(0 To 3 * k - 1)
         For i = 0 To k - 1
