@@ -266,7 +266,9 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
                 128 + ((clr(j) \ &H100&) And &HFF&) \ 2, _
                 128 + ((clr(j) \ &H10000) And &HFF&) \ 2)
             ' Excel ties the marker outline to the series line format, so the
-            ' Line Width setting sets both. With markers only (Line = 0),
+            ' Line Width setting sets both. With markers only (Line = 0) the
+            ' line still gets the series colour, so switching it on by hand
+            ' (Format Data Series > Line > Solid line) gives the right colour;
             ' touching the line format switches a connecting line on, so it is
             ' switched off again and the marker colours re-applied: no line,
             ' ever, when Line is 0.
@@ -274,8 +276,10 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
                 .Format.Line.Visible = msoTrue
                 .Format.Line.ForeColor.RGB = clr(j)
                 If lwSet > 0 Then .Format.Line.Weight = lwSet Else .Format.Line.Weight = wPL
-            ElseIf lwSet > 0 Then
-                .Format.Line.Weight = lwSet
+            Else
+                .Format.Line.Visible = msoTrue
+                .Format.Line.ForeColor.RGB = clr(j)
+                If lwSet > 0 Then .Format.Line.Weight = lwSet
                 .Format.Line.Visible = msoFalse
                 .MarkerForegroundColor = clr(j)
                 .MarkerBackgroundColor = RGB( _
