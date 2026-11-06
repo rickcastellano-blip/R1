@@ -69,7 +69,7 @@ series (legend entry); each row within a block is a group on the x axis. A blank
 block; `#N/A` stays in it as a group with no bar. The series name is in the column left of
 the tag, on the block's first row. The column right of the values holds ± errors; bar labels
 (data tags) are text in that column (then no error bars), or whatever is in the next
-column (text or numbers, shown as displayed), drawn above the error bars. An empty column stops the search. The colour scheme is
+column (text or numbers, shown as displayed), drawn above the error bars. **Buttons!H3** sets their direction: `horiz` (default) or `vert`. An empty column stops the search. The colour scheme is
 **Buttons!G3**: standard (the xgrapher.m colour list, as in the Line Graph), or darkening
 pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red;
 just blue and red when there is only one pair), or darkening triplets (the same with gray as a

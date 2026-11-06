@@ -20,6 +20,7 @@ Private Const GAP_GROUPED   As Long = 150
 ' colour scheme cell on the Buttons sheet of this workbook: standard / darkening pairs
 Private Const SETTINGS_SHEET As String = "Buttons"
 Private Const SCHEME_CELL    As String = "G3"
+Private Const LABELDIR_CELL  As String = "H3"   ' bar labels: horiz or vert
 Private Const GAP_SINGLE    As Long = 80
 Private Const LABEL_FS      As Double = 10       ' bar-label font size (pt, not scaled)
 ' =========================================================
@@ -40,7 +41,7 @@ Sub GenerateStrengthBarGraph()
     Dim fsT As Double, fsA As Double, fsL As Double
     Dim wAX As Double, axMax As Double, axStep As Double
     Dim maxLen As Long, rot As Long, paH As Double
-    Dim legCorner As Long, legExtraW As Double, legExtraH As Double
+    Dim legCorner As Long, legExtraW As Double, legExtraH As Double, vertLbl As Boolean
 
     '--- 1. pick the range (you can switch workbooks in this dialog) --------
     On Error Resume Next
@@ -171,6 +172,7 @@ Sub GenerateStrengthBarGraph()
     Next j
 
     clr = BarColors(ReadScheme(), nBlk)
+    vertLbl = ReadVertLabels()
 
     '--- 7. one series per block, wired to the source cells ----------------
     For j = 1 To nBlk
@@ -219,7 +221,7 @@ Sub GenerateStrengthBarGraph()
     '--- 8b. bar labels (after the ChartArea font, which would resize them) --
     For j = 1 To nBlk
         If lblC(j) > 0 Then
-            AddBarLabels ch.SeriesCollection(j), tws.Cells(blkRow(j), lblC(j)).Resize(rc(j), 1)
+            AddBarLabels ch.SeriesCollection(j), tws.Cells(blkRow(j), lblC(j)).Resize(rc(j), 1), vertLbl
         End If
     Next j
 
@@ -318,7 +320,7 @@ Sub GenerateStrengthBarGraph()
     ' pick the corner / column count that covers no bar, raising the axis
     ' maximum if no corner is clear, or put the legend outside the plot
     PlaceBarLegend ch, tws, W, H, nBlk, nRow, ch.ChartGroups(1).GapWidth, fsL * LG_LINESP, _
-                   blkRow, rc, valC, errC, lblC, legCorner, legExtraW, legExtraH
+                   blkRow, rc, valC, errC, lblC, vertLbl, legCorner, legExtraW, legExtraH
 
     On Error Resume Next
     For p = 1 To 2
@@ -405,7 +407,7 @@ End Function
 
 ' Data labels above each bar, text taken from lblRng (as the Line Graph's
 ' point labels: linked to the cells on Excel 2013+, static text before that).
-Private Sub AddBarLabels(ser As Series, lblRng As Range)
+Private Sub AddBarLabels(ser As Series, lblRng As Range, ByVal vertLbl As Boolean)
     Dim i As Long, v As Variant, linked As Boolean
 
     ser.HasDataLabels = True
@@ -425,6 +427,7 @@ Private Sub AddBarLabels(ser As Series, lblRng As Range)
         .ShowCategoryName = False
         .ShowLegendKey = False
         .Position = xlLabelPositionOutsideEnd
+        If vertLbl Then .Orientation = xlUpward Else .Orientation = xlHorizontal
         .Font.Name = FONT_NAME
         .Font.Size = LABEL_FS
         .Font.Bold = False
@@ -485,7 +488,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                            ByVal n As Long, ByVal nCat As Long, ByVal gapPct As Double, _
                            ByVal lineH As Double, blkRow() As Long, rc() As Long, _
                            ByVal valC As Long, ByVal errC As Long, lblC() As Long, _
-                           ByRef legCorner As Long, ByRef extraW As Double, ByRef extraH As Double)
+                           ByVal vertLbl As Boolean, ByRef legCorner As Long, ByRef extraW As Double, ByRef extraH As Double)
     Dim bx0() As Double, bx1() As Double, by0() As Double, by1() As Double, nB As Long
     Dim bL() As Double, t As Variant
     Dim j As Long, cIdx As Long, v As Variant, e As Variant, barW As Double, barTop As Double
@@ -517,7 +520,13 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                 nB = nB + 1
                 If lblC(j) > 0 Then                  ' a label sits above the bar
                     t = tws.Cells(blkRow(j) + cIdx - 1, lblC(j)).Value
-                    If Len(CellText(t)) > 0 Then bL(nB) = LABEL_FS * 1.3 + 2
+                    If Len(CellText(t)) > 0 Then
+                        If vertLbl Then            ' rotated: as tall as the text is long
+                            bL(nB) = Len(tws.Cells(blkRow(j) + cIdx - 1, lblC(j)).Text) * LABEL_FS * 0.6 + 4
+                        Else
+                            bL(nB) = LABEL_FS * 1.3 + 2
+                        End If
+                    End If
                 End If
                 bx0(nB) = cIdx - 0.5 + (gapPct / 100#) * barW / 2# + (j - 1) * barW
                 bx1(nB) = bx0(nB) + barW
@@ -750,6 +759,17 @@ End Sub
 
 ' Buttons!G3: "darkening pairs" (any case); anything else, a blank cell or a
 ' missing sheet means standard.
+' Bar-label direction from Buttons!H3: "vert" turns them upright, anything
+' else (horiz, blank) leaves them horizontal.
+Private Function ReadVertLabels() As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    ReadVertLabels = (LCase$(CellText(ws.Range(LABELDIR_CELL).Value)) = "vert")
+End Function
+
 Private Function ReadScheme() As String
     Dim ws As Worksheet
     ReadScheme = "standard"
