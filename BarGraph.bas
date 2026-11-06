@@ -155,16 +155,17 @@ Sub GenerateStrengthBarGraph()
         ch.SeriesCollection(1).Delete
     Loop
 
-    ' Bar labels: the first text column right of the values, i.e. the +/- column
-    ' itself (then no error bars) or the one after it. An empty column ends the
-    ' search, so a table further right is never taken as labels.
+    ' Bar labels: text in the +/- column itself (then no error bars), or
+    ' anything (text, or a number such as a % shown as is) in the column after
+    ' a numeric +/- column. An empty column ends the search, so a table further
+    ' right is never taken as labels.
     ReDim lblC(1 To nBlk)
     For j = 1 To nBlk
         If ColHasText(tws, blkRow(j), rc(j), errC) Then
             lblC(j) = errC
         ElseIf ColIsBlank(tws, blkRow(j), rc(j), errC) Then
             lblC(j) = 0
-        ElseIf ColHasText(tws, blkRow(j), rc(j), errC + 1) Then
+        ElseIf Not ColIsBlank(tws, blkRow(j), rc(j), errC + 1) Then
             lblC(j) = errC + 1
         End If
     Next j
@@ -338,7 +339,38 @@ Sub GenerateStrengthBarGraph()
 
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
+    LiftBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC
     ch.Refresh                               ' draw the final layout now
+End Sub
+
+' A label sits on the bar's top by default, where the error bar's cap runs
+' through it: move each one up to sit just above its error bar instead.
+Private Sub LiftBarLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow() As Long, _
+                          rc() As Long, ByVal valC As Long, ByVal errC As Long, lblC() As Long)
+    Dim j As Long, i As Long, v As Variant, e As Variant
+    Dim yLo As Double, yHi As Double, pT As Double, pH As Double, yTop As Double
+    On Error Resume Next
+    ch.Refresh
+    DoEvents
+    yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
+    pT = ch.PlotArea.InsideTop: pH = ch.PlotArea.InsideHeight
+    If yHi <= yLo Or pH <= 0 Then Exit Sub
+    For j = 1 To n
+        If lblC(j) > 0 And lblC(j) <> errC Then
+            For i = 1 To rc(j)
+                v = tws.Cells(blkRow(j) + i - 1, valC).Value
+                e = tws.Cells(blkRow(j) + i - 1, errC).Value
+                If IsNum(v) And IsNum(e) Then
+                    If ch.SeriesCollection(j).Points(i).HasDataLabel Then
+                        yTop = pT + (1 - (CDbl(v) + Abs(CDbl(e)) - yLo) / (yHi - yLo)) * pH
+                        With ch.SeriesCollection(j).Points(i).DataLabel
+                            If .Top + .Height > yTop - 1 Then .Top = yTop - .Height - 1
+                        End With
+                    End If
+                End If
+            Next i
+        End If
+    Next j
 End Sub
 
 
@@ -407,7 +439,7 @@ Private Sub AddBarLabels(ser As Series, lblRng As Range)
         ElseIf Len(Trim$(CStr(v))) = 0 Then
             ser.Points(i).HasDataLabel = False
         ElseIf Not linked Then
-            ser.Points(i).DataLabel.Text = CStr(v)
+            ser.Points(i).DataLabel.Text = lblRng.Cells(i, 1).Text   ' as displayed
         End If
     Next i
 End Sub
@@ -455,7 +487,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                            ByVal valC As Long, ByVal errC As Long, lblC() As Long, _
                            ByRef legCorner As Long, ByRef extraW As Double, ByRef extraH As Double)
     Dim bx0() As Double, bx1() As Double, by0() As Double, by1() As Double, nB As Long
-    Dim bv() As Double, bL() As Double, t As Variant
+    Dim bL() As Double, t As Variant
     Dim j As Long, cIdx As Long, v As Variant, e As Variant, barW As Double, barTop As Double
     Dim pL As Double, pT As Double, pW As Double, pH As Double, insX As Double, insY As Double
     Dim w1 As Double, h1 As Double, eW As Double, eH As Double, padW As Double, padH As Double
@@ -473,7 +505,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     ' y from 0 to value + error
     ReDim bx0(1 To n * nCat): ReDim bx1(1 To n * nCat)
     ReDim by0(1 To n * nCat): ReDim by1(1 To n * nCat)
-    ReDim bv(1 To n * nCat): ReDim bL(1 To n * nCat)
+    ReDim bL(1 To n * nCat)
     barW = 1# / (n + gapPct / 100#)
     For j = 1 To n
         For cIdx = 1 To rc(j)
@@ -483,7 +515,6 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                 barTop = CDbl(v)
                 If IsNum(e) And lblC(j) <> errC Then barTop = barTop + Abs(CDbl(e))
                 nB = nB + 1
-                bv(nB) = CDbl(v)
                 If lblC(j) > 0 Then                  ' a label sits above the bar
                     t = tws.Cells(blkRow(j) + cIdx - 1, lblC(j)).Value
                     If Len(CellText(t)) > 0 Then bL(nB) = LABEL_FS * 1.3 + 2
@@ -558,7 +589,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                 For corner = 0 To 3                  ' 0 TR, 1 TL, 2 BR, 3 BL
                     If corner Mod 2 = 0 Then lx = pL + pW - insX - lw Else lx = pL + insX
                     If corner < 2 Then ly = pT + insY Else ly = pT + pH - insY - lh
-                    hits = BarHits(lx, ly, lw, lh, nB, bx0, bx1, by0, by1, bv, bL, nCat, _
+                    hits = BarHits(lx, ly, lw, lh, nB, bx0, bx1, by0, by1, bL, nCat, _
                                    yLo, yHi, pL, pT, pW, pH)
                     sc = hits * 1000 + (k - 1) * 4 + corner
                     If sc < bSc Then
@@ -651,7 +682,7 @@ End Sub
 ' Number of bars (with their labels) the legend box plus a 2 pt margin would cover.
 Private Function BarHits(ByVal lx As Double, ByVal ly As Double, ByVal lw As Double, _
                          ByVal lh As Double, ByVal nB As Long, bx0() As Double, bx1() As Double, _
-                         by0() As Double, by1() As Double, bv() As Double, bL() As Double, _
+                         by0() As Double, by1() As Double, bL() As Double, _
                          ByVal nCat As Long, _
                          ByVal yLo As Double, ByVal yHi As Double, ByVal pL As Double, _
                          ByVal pT As Double, ByVal pW As Double, ByVal pH As Double) As Long
@@ -664,7 +695,7 @@ Private Function BarHits(ByVal lx As Double, ByVal ly As Double, ByVal lw As Dou
         ya = pT + (1 - (by1(i) - yLo) / (yHi - yLo)) * pH      ' bar top on screen
         yb = pT + (1 - (by0(i) - yLo) / (yHi - yLo)) * pH      ' bar bottom
         If bL(i) > 0 Then                                       ' label above the bar
-            ya = Application.Min(ya, pT + (1 - (bv(i) - yLo) / (yHi - yLo)) * pH - bL(i))
+            ya = ya - bL(i)                                     ' (labels sit above the error bar)
         End If
         If xb > lx - PAD And xa < lx + lw + PAD And yb > ly - PAD And ya < ly + lh + PAD Then
             BarHits = BarHits + 1

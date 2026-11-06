@@ -68,8 +68,8 @@ Select a block with a `bargraph` tag (and optionally `xlabels`). Each block of v
 series (legend entry); each row within a block is a group on the x axis. A blank cell ends a
 block; `#N/A` stays in it as a group with no bar. The series name is in the column left of
 the tag, on the block's first row. The column right of the values holds ± errors; bar labels
-(data tags) are the first text column right of the values, which is that column (then no
-error bars) or the next one. An empty column stops the search. The colour scheme is
+(data tags) are text in that column (then no error bars), or whatever is in the next
+column (text or numbers, shown as displayed), drawn above the error bars. An empty column stops the search. The colour scheme is
 **Buttons!G3**: standard (the xgrapher.m colour list, as in the Line Graph), or darkening
 pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red;
 just blue and red when there is only one pair), or darkening triplets (the same with gray as a
