@@ -82,7 +82,9 @@ needed), or outside the plot on the right.
 
 Imports a TTi CPX400DP logger CSV into the **RCPT** sheet, one row (and current chart) per
 6 h run; a file holding several runs gives several rows. Columns are read from the
-`#TimeStamp` header (5- and 9-column layouts). **RCPT Recovered** reads Test Bridge
+`#TimeStamp` header (5- and 9-column layouts). A log with both supply channels gives a run
+for each channel that reached test voltage, named from the file name split at commas
+(`11368J, 11366J` → channel 1 = 11368J, channel 2 = 11366J), else the name plus ` ch2`. **RCPT Recovered** reads Test Bridge
 recovered logs (Volts in field 2, Amps in field 4) and uses the same analysis.
 
 ## NT BUILD 492

@@ -24,19 +24,45 @@ Private Const CHART_MAX_POINTS     As Long = 1200    ' plotted points; keeps the
 Private Const PARTIAL_FILL         As Long = 13431551  ' RGB(255,242,204) light yellow
 
 '====================== BUTTON: Add RCPT Run ==================
+' A log can hold both supply channels (one specimen each): every channel that
+' reached test voltage is analysed in turn. With several channels, the sample
+' names come from the file name split at commas ("11368J, 11366J" -> channel
+' 1 = 11368J, channel 2 = 11366J), or the name plus " ch<n>" if they don't split.
 Public Sub AddRCPTRunFromCSV()
-    Dim path As String, msg As String
+    Dim path As String, msg As String, sample As String, names() As String
     Dim tS() As Double, vA() As Double, aA() As Double, n As Long
+    Dim ch As Long, nCh As Long, chId As String, i As Long, nDone As Long, live As Boolean
 
     path = PickCSVFile()
     If Len(path) = 0 Then Exit Sub
+    sample = SampleFromFileName(path)
+    names = Split(sample, ",")
 
-    Application.StatusBar = "Reading " & Dir(path) & " ..."
-    msg = ReadLog(path, tS, vA, aA, n)
-    Application.StatusBar = False
-    If Len(msg) > 0 Then MsgBox msg, vbExclamation, "Add RCPT Run": Exit Sub
+    nCh = 1
+    ch = 1
+    Do While ch <= nCh
+        Application.StatusBar = "Reading " & Dir(path) & " (channel " & ch & ") ..."
+        msg = ReadLog(path, ch, tS, vA, aA, n, nCh, chId)
+        Application.StatusBar = False
+        If Len(msg) > 0 Then MsgBox msg, vbExclamation, "Add RCPT Run": Exit Sub
 
-    RCPTAnalyzeLog tS, vA, aA, n, SampleFromFileName(path)
+        ' a channel that never reached test voltage holds no specimen
+        live = False
+        For i = 1 To n
+            If vA(i) > V_THRESHOLD Then live = True: Exit For
+        Next i
+        If live Or (ch = nCh And nDone = 0) Then
+            If nCh = 1 Then
+                RCPTAnalyzeLog tS, vA, aA, n, sample
+            ElseIf UBound(names) + 1 = nCh Then
+                RCPTAnalyzeLog tS, vA, aA, n, Trim$(names(ch - 1))
+            Else
+                RCPTAnalyzeLog tS, vA, aA, n, sample & " ch" & chId
+            End If
+            nDone = nDone + 1
+        End If
+        ch = ch + 1
+    Loop
 End Sub
 
 '================ shared analysis (also used by RCPT Recovered) ============
@@ -262,13 +288,16 @@ Private Function AnalyzeRun(tS() As Double, vA() As Double, aA() As Double, ByVa
 End Function
 
 '====================== CSV read ==============================
-' Reads every row with a timestamp, a voltage and a current into tS / vA /
-' aA (1..n). Columns come from the "#TimeStamp,..." header (5- and 9-column
-' layouts); without one, TimeStamp,Volts,_,Amps.
-Private Function ReadLog(path As String, ByRef tS() As Double, ByRef vA() As Double, _
-                         ByRef aA() As Double, ByRef n As Long) As String
+' Reads every row with a timestamp, a voltage and a current of supply channel
+' number ch (1 = the first Volts column) into tS / vA / aA (1..n). Columns come
+' from the "#TimeStamp,..." header (5- and 9-column layouts) and the channel
+' row above it; without a header, TimeStamp,Volts,_,Amps. nCh returns how many
+' channels the log holds, chId the channel's number as the logger names it.
+Private Function ReadLog(path As String, ByVal ch As Long, ByRef tS() As Double, _
+                         ByRef vA() As Double, ByRef aA() As Double, ByRef n As Long, _
+                         ByRef nCh As Long, ByRef chId As String) As String
     Dim ff As Integer, txt As String, lines() As String, ln As String, f() As String
-    Dim i As Long, nRows As Long, hdrMsg As String
+    Dim i As Long, nRows As Long, hdrMsg As String, chanLine As String
     Dim tCol As Long, vCol As Long, aCol As Long, maxCol As Long
 
     On Error GoTo Fail
@@ -286,17 +315,19 @@ Private Function ReadLog(path As String, ByRef tS() As Double, ByRef vA() As Dou
     ReDim vA(1 To UBound(lines) + 1)
     ReDim aA(1 To UBound(lines) + 1)
     tCol = 0: vCol = 1: aCol = 3: maxCol = 3
-    n = 0
+    n = 0: nCh = 1: chId = CStr(ch)
     For i = 0 To UBound(lines)
         ln = lines(i)
         If Len(ln) > 20 Then
             If StrComp(Left$(ln, 10), "#TimeStamp", vbTextCompare) = 0 Then
-                hdrMsg = MapColumns(ln, tCol, vCol, aCol)
+                hdrMsg = MapColumns(ln, chanLine, ch, tCol, vCol, aCol, nCh, chId)
                 If Len(hdrMsg) > 0 Then ReadLog = hdrMsg: Exit Function
                 maxCol = tCol
                 If vCol > maxCol Then maxCol = vCol
                 If aCol > maxCol Then maxCol = aCol
-            ElseIf Left$(ln, 1) <> "#" Then
+            ElseIf Left$(ln, 1) = "#" Then
+                chanLine = ln                        ' the last one is the channel row
+            Else
                 nRows = nRows + 1
                 f = Split(ln, ",")
                 If UBound(f) >= maxCol Then
@@ -330,21 +361,52 @@ Fail:
     ReadLog = "Could not read the file:" & vbCrLf & path & vbCrLf & vbCrLf & Err.Description
 End Function
 
-' Finds the first Volts and first Amps columns in the "#TimeStamp,..." header row,
+' Finds channel ch's Volts and Amps columns in the "#TimeStamp,..." header row,
 ' and the TimeStamp column that belongs to that Amps column. Handles the 5-column
-' layout (TimeStamp,Volts,TimeStamp,Amps) and the older 9-column one
-' (TimeStamp,Volts,TimeStamp,Volts,TimeStamp,Amps,TimeStamp,Amps).
-Private Function MapColumns(hdrLine As String, ByRef tCol As Long, _
-                            ByRef vCol As Long, ByRef aCol As Long) As String
-    Dim h() As String, k As Long
+' layout (TimeStamp,Volts,TimeStamp,Amps) and the 9-column two-channel one
+' (TimeStamp,Volts,TimeStamp,Volts,TimeStamp,Amps,TimeStamp,Amps). The row above
+' the header ("#CPX400DP,1,CPX400DP,2,...") gives each TimeStamp/value pair's
+' channel, so Amps is matched to Volts by channel; without it, by order.
+' nCh returns the number of Volts columns.
+Private Function MapColumns(hdrLine As String, chanLine As String, ByVal ch As Long, _
+                            ByRef tCol As Long, ByRef vCol As Long, ByRef aCol As Long, _
+                            ByRef nCh As Long, ByRef chId As String) As String
+    Dim h() As String, cf() As String, k As Long, nV As Long, nA As Long, id As String
 
     h = Split(Mid$(hdrLine, 2), ",")
+    cf = Split(Mid$(chanLine, 2), ",")
     tCol = -1: vCol = -1: aCol = -1
     For k = 0 To UBound(h)
-        Select Case LCase$(Trim$(h(k)))
-            Case "volts": If vCol < 0 Then vCol = k
-            Case "amps":  If aCol < 0 Then aCol = k
-        End Select
+        If LCase$(Trim$(h(k))) = "volts" Then
+            nV = nV + 1
+            If nV = ch Then vCol = k
+        End If
+    Next k
+    If nV > 0 Then nCh = nV
+    If vCol < 0 And nV > 0 Then
+        MapColumns = "The log has no channel " & ch & "."
+        Exit Function
+    End If
+
+    ' channel number of the Volts column: field (pair * 2 + 1) of the channel row
+    If vCol >= 0 Then
+        If (vCol \ 2) * 2 + 1 <= UBound(cf) Then
+            id = Trim$(cf((vCol \ 2) * 2 + 1))
+            If Not IsNumeric(id) Then id = ""
+        End If
+    End If
+    If Len(id) > 0 Then chId = id
+    For k = 0 To UBound(h)
+        If LCase$(Trim$(h(k))) = "amps" Then
+            nA = nA + 1
+            If Len(id) > 0 Then
+                If (k \ 2) * 2 + 1 <= UBound(cf) Then
+                    If Trim$(cf((k \ 2) * 2 + 1)) = id Then aCol = k: Exit For
+                End If
+            ElseIf nA = ch Then
+                aCol = k: Exit For
+            End If
+        End If
     Next k
 
     If vCol < 0 Or aCol < 0 Then
