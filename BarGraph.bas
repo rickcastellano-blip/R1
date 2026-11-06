@@ -21,6 +21,7 @@ Private Const GAP_GROUPED   As Long = 150
 Private Const SETTINGS_SHEET As String = "Buttons"
 Private Const SCHEME_CELL    As String = "G3"
 Private Const GAP_SINGLE    As Long = 80
+Private Const LABEL_FS      As Double = 10       ' bar-label font size (pt, not scaled)
 ' =========================================================
 
 Sub GenerateStrengthBarGraph()
@@ -28,7 +29,7 @@ Sub GenerateStrengthBarGraph()
     Dim tagR As Long, tagC As Long, xlR As Long, xlC As Long
     Dim labC As Long, valC As Long, errC As Long, nameC As Long
     Dim r As Long, i As Long, j As Long, lastR As Long, p As Long
-    Dim blkRow() As Long, blkLab() As String, rc() As Long
+    Dim blkRow() As Long, blkLab() As String, rc() As Long, lblC() As Long
     Dim nBlk As Long, nRow As Long, nLab As Long
     Dim inBlk As Boolean
     Dim b As Variant, c As Variant, dv As Double, de As Double
@@ -154,6 +155,20 @@ Sub GenerateStrengthBarGraph()
         ch.SeriesCollection(1).Delete
     Loop
 
+    ' Bar labels: the first text column right of the values, i.e. the +/- column
+    ' itself (then no error bars) or the one after it. An empty column ends the
+    ' search, so a table further right is never taken as labels.
+    ReDim lblC(1 To nBlk)
+    For j = 1 To nBlk
+        If ColHasText(tws, blkRow(j), rc(j), errC) Then
+            lblC(j) = errC
+        ElseIf ColIsBlank(tws, blkRow(j), rc(j), errC) Then
+            lblC(j) = 0
+        ElseIf ColHasText(tws, blkRow(j), rc(j), errC + 1) Then
+            lblC(j) = errC + 1
+        End If
+    Next j
+
     clr = BarColors(ReadScheme(), nBlk)
 
     '--- 7. one series per block, wired to the source cells ----------------
@@ -173,13 +188,15 @@ Sub GenerateStrengthBarGraph()
             .Format.Line.Visible = msoTrue
             .Format.Line.ForeColor.RGB = RGB(0, 0, 0)
             .Format.Line.Weight = wAX
-            .ErrorBar Direction:=xlY, Include:=xlBoth, _
-                      Type:=xlErrorBarTypeCustom, Amount:=eRng, MinusValues:=eRng
-            With .ErrorBars
-                .EndStyle = xlCap
-                .Format.Line.ForeColor.RGB = RGB(0, 0, 0)
-                .Format.Line.Weight = wAX
-            End With
+            If lblC(j) <> errC Then
+                .ErrorBar Direction:=xlY, Include:=xlBoth, _
+                          Type:=xlErrorBarTypeCustom, Amount:=eRng, MinusValues:=eRng
+                With .ErrorBars
+                    .EndStyle = xlCap
+                    .Format.Line.ForeColor.RGB = RGB(0, 0, 0)
+                    .Format.Line.Weight = wAX
+                End With
+            End If
         End With
     Next j
 
@@ -197,6 +214,13 @@ Sub GenerateStrengthBarGraph()
     With ch.ChartArea.Font
         .Name = FONT_NAME: .Size = fsT: .Color = RGB(0, 0, 0): .Bold = False
     End With
+
+    '--- 8b. bar labels (after the ChartArea font, which would resize them) --
+    For j = 1 To nBlk
+        If lblC(j) > 0 Then
+            AddBarLabels ch.SeriesCollection(j), tws.Cells(blkRow(j), lblC(j)).Resize(rc(j), 1)
+        End If
+    Next j
 
     '--- 9. axes ----------------------------------------------------------
     NiceScale maxVal, axMax, axStep
@@ -293,7 +317,7 @@ Sub GenerateStrengthBarGraph()
     ' pick the corner / column count that covers no bar, raising the axis
     ' maximum if no corner is clear, or put the legend outside the plot
     PlaceBarLegend ch, tws, W, H, nBlk, nRow, ch.ChartGroups(1).GapWidth, fsL * LG_LINESP, _
-                   blkRow, rc, valC, errC, legCorner, legExtraW, legExtraH
+                   blkRow, rc, valC, errC, lblC, legCorner, legExtraW, legExtraH
 
     On Error Resume Next
     For p = 1 To 2
@@ -329,6 +353,63 @@ Private Sub NiceScale(ByVal raw As Double, ByRef axMax As Double, ByRef axStep A
         If n <= 6 Then axStep = s: axMax = s * n: Exit Sub
     Next i
     axStep = e: axMax = e * (-Int(-raw / e))
+End Sub
+
+' True if every cell in column c, rows r0..r0+n-1, is empty.
+Private Function ColIsBlank(ws As Worksheet, r0 As Long, n As Long, c As Long) As Boolean
+    ColIsBlank = (Application.CountA(ws.Cells(r0, c).Resize(n, 1)) = 0)
+End Function
+
+' True if any cell in column c, rows r0..r0+n-1, holds non-blank text.
+Private Function ColHasText(ws As Worksheet, r0 As Long, n As Long, c As Long) As Boolean
+    Dim i As Long, v As Variant
+    For i = 0 To n - 1
+        v = ws.Cells(r0 + i, c).Value
+        If VarType(v) = vbString Then
+            If Len(Trim$(v)) > 0 Then ColHasText = True: Exit Function
+        End If
+    Next i
+End Function
+
+' Data labels above each bar, text taken from lblRng (as the Line Graph's
+' point labels: linked to the cells on Excel 2013+, static text before that).
+Private Sub AddBarLabels(ser As Series, lblRng As Range)
+    Dim i As Long, v As Variant, linked As Boolean
+
+    ser.HasDataLabels = True
+    On Error Resume Next
+    ser.DataLabels.Format.TextFrame2.TextRange.InsertChartField msoChartFieldRange, _
+        "='" & Replace(lblRng.Worksheet.Name, "'", "''") & "'!" & lblRng.Address, 0
+    linked = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+
+    With ser.DataLabels
+        If linked Then
+            .ShowRange = True
+            .ShowValue = False
+        End If
+        .ShowSeriesName = False
+        .ShowCategoryName = False
+        .ShowLegendKey = False
+        .Position = xlLabelPositionOutsideEnd
+        .Font.Name = FONT_NAME
+        .Font.Size = LABEL_FS
+        .Font.Bold = False
+        .Font.Color = RGB(0, 0, 0)
+    End With
+
+    ' error and blank cells get no label
+    For i = 1 To Application.Min(lblRng.Rows.Count, ser.Points.Count)
+        v = lblRng.Cells(i, 1).Value
+        If IsError(v) Then
+            ser.Points(i).HasDataLabel = False
+        ElseIf Len(Trim$(CStr(v))) = 0 Then
+            ser.Points(i).HasDataLabel = False
+        ElseIf Not linked Then
+            ser.Points(i).DataLabel.Text = CStr(v)
+        End If
+    Next i
 End Sub
 
 ' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
@@ -371,9 +452,10 @@ End Sub
 Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal H As Double, _
                            ByVal n As Long, ByVal nCat As Long, ByVal gapPct As Double, _
                            ByVal lineH As Double, blkRow() As Long, rc() As Long, _
-                           ByVal valC As Long, ByVal errC As Long, ByRef legCorner As Long, _
-                           ByRef extraW As Double, ByRef extraH As Double)
+                           ByVal valC As Long, ByVal errC As Long, lblC() As Long, _
+                           ByRef legCorner As Long, ByRef extraW As Double, ByRef extraH As Double)
     Dim bx0() As Double, bx1() As Double, by0() As Double, by1() As Double, nB As Long
+    Dim bv() As Double, bL() As Double, t As Variant
     Dim j As Long, cIdx As Long, v As Variant, e As Variant, barW As Double, barTop As Double
     Dim pL As Double, pT As Double, pW As Double, pH As Double, insX As Double, insY As Double
     Dim w1 As Double, h1 As Double, eW As Double, eH As Double, padW As Double, padH As Double
@@ -391,6 +473,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     ' y from 0 to value + error
     ReDim bx0(1 To n * nCat): ReDim bx1(1 To n * nCat)
     ReDim by0(1 To n * nCat): ReDim by1(1 To n * nCat)
+    ReDim bv(1 To n * nCat): ReDim bL(1 To n * nCat)
     barW = 1# / (n + gapPct / 100#)
     For j = 1 To n
         For cIdx = 1 To rc(j)
@@ -398,8 +481,13 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
             If IsNum(v) Then
                 e = tws.Cells(blkRow(j) + cIdx - 1, errC).Value
                 barTop = CDbl(v)
-                If IsNum(e) Then barTop = barTop + Abs(CDbl(e))
+                If IsNum(e) And lblC(j) <> errC Then barTop = barTop + Abs(CDbl(e))
                 nB = nB + 1
+                bv(nB) = CDbl(v)
+                If lblC(j) > 0 Then                  ' a label sits above the bar
+                    t = tws.Cells(blkRow(j) + cIdx - 1, lblC(j)).Value
+                    If Len(CellText(t)) > 0 Then bL(nB) = LABEL_FS * 1.3 + 2
+                End If
                 bx0(nB) = cIdx - 0.5 + (gapPct / 100#) * barW / 2# + (j - 1) * barW
                 bx1(nB) = bx0(nB) + barW
                 If barTop >= 0 Then by0(nB) = 0: by1(nB) = barTop Else by0(nB) = barTop: by1(nB) = 0
@@ -470,7 +558,8 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                 For corner = 0 To 3                  ' 0 TR, 1 TL, 2 BR, 3 BL
                     If corner Mod 2 = 0 Then lx = pL + pW - insX - lw Else lx = pL + insX
                     If corner < 2 Then ly = pT + insY Else ly = pT + pH - insY - lh
-                    hits = BarHits(lx, ly, lw, lh, nB, bx0, bx1, by0, by1, nCat, yLo, yHi, pL, pT, pW, pH)
+                    hits = BarHits(lx, ly, lw, lh, nB, bx0, bx1, by0, by1, bv, bL, nCat, _
+                                   yLo, yHi, pL, pT, pW, pH)
                     sc = hits * 1000 + (k - 1) * 4 + corner
                     If sc < bSc Then
                         bSc = sc: bHits = hits: bK = k: bC = corner: bW = lw: bH = lh: bX = lx: bY = ly
@@ -559,10 +648,11 @@ Outside:
 Done:
 End Sub
 
-' Number of bars the legend box (plus a 2 pt margin) would cover.
+' Number of bars (with their labels) the legend box plus a 2 pt margin would cover.
 Private Function BarHits(ByVal lx As Double, ByVal ly As Double, ByVal lw As Double, _
                          ByVal lh As Double, ByVal nB As Long, bx0() As Double, bx1() As Double, _
-                         by0() As Double, by1() As Double, ByVal nCat As Long, _
+                         by0() As Double, by1() As Double, bv() As Double, bL() As Double, _
+                         ByVal nCat As Long, _
                          ByVal yLo As Double, ByVal yHi As Double, ByVal pL As Double, _
                          ByVal pT As Double, ByVal pW As Double, ByVal pH As Double) As Long
     Const PAD As Double = 2
@@ -573,6 +663,9 @@ Private Function BarHits(ByVal lx As Double, ByVal ly As Double, ByVal lw As Dou
         xb = pL + (bx1(i) - 0.5) / nCat * pW
         ya = pT + (1 - (by1(i) - yLo) / (yHi - yLo)) * pH      ' bar top on screen
         yb = pT + (1 - (by0(i) - yLo) / (yHi - yLo)) * pH      ' bar bottom
+        If bL(i) > 0 Then                                       ' label above the bar
+            ya = Application.Min(ya, pT + (1 - (bv(i) - yLo) / (yHi - yLo)) * pH - bL(i))
+        End If
         If xb > lx - PAD And xa < lx + lw + PAD And yb > ly - PAD And ya < ly + lh + PAD Then
             BarHits = BarHits + 1
         End If
