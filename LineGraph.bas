@@ -27,6 +27,7 @@ Private Const SCHEME_CELL    As String = "G7"     ' standard / stoplight / green
 Private Const MARKER_CELL    As String = "H7"     ' marker size in pt (2-72); blank = default
 Private Const LINEW_CELL     As String = "I7"     ' line + marker outline width in pt; blank = default
 Private Const LBLPOS_CELL    As String = "J7"     ' point labels: right, above, below, left or in
+Private Const LBLFS_CELL     As String = "K7"     ' point-label font size in pt; blank = LABEL_FS
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range
@@ -103,7 +104,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim axMax As Double, axStep As Double, axMin As Double
     Dim lblC() As Long, fsTx As Double, legCorner As Long, legExtraW As Double, legExtraH As Double
     Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
-    Dim lblPos As Long
+    Dim lblPos As Long, lblFs As Double
 
     Dim nBlank As Long
 
@@ -214,7 +215,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     msz = Application.Min(72, Application.Max(2, Round(MAT_MS * sc * 0.5, 0)))
 
     '--- 4b. line / colour settings from the Buttons sheet ----------------
-    ReadSettings useLine, scheme, mSet, lwSet, lblPos
+    ReadSettings useLine, scheme, mSet, lwSet, lblPos, lblFs
+    If lblFs > 0 Then fsTx = lblFs           ' Label font size setting overrides the default
     ' error bars use the marker outline width: Line Width (I7) when set, else
     ' the plot line width, or Excel's 0.75 pt default border for markers only
     If lwSet > 0 Then
@@ -599,9 +601,9 @@ End Function
 '     blank or text keeps the defaults.
 ' Missing sheet or cells fall back to lines + standard + default size.
 Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef mSize As Double, _
-                         ByRef lineW As Double, ByRef lblPos As Long)
+                         ByRef lineW As Double, ByRef lblPos As Long, ByRef lblFs As Double)
     Dim ws As Worksheet, v As Variant
-    useLine = True: scheme = "standard": mSize = 0: lineW = 0: lblPos = xlLabelPositionRight
+    useLine = True: scheme = "standard": mSize = 0: lineW = 0: lblPos = xlLabelPositionRight: lblFs = 0
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
     On Error GoTo 0
@@ -640,6 +642,11 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef
         Case "left":  lblPos = xlLabelPositionLeft
         Case "in":    lblPos = xlLabelPositionCenter
     End Select
+
+    v = ws.Range(LBLFS_CELL).Value
+    If IsNum(v) Then
+        If CDbl(v) > 0 Then lblFs = Application.Min(72, Application.Max(4, CDbl(v)))
+    End If
 End Sub
 
 ' One colour per series (1..n).

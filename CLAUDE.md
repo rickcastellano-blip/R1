@@ -36,7 +36,7 @@ Read README.md first: it maps every button to its macro, Excel module, file and 
   NTBuild492, NTBuild492Recovered); keep the button macro names stable so existing button assignments work.
 - Graph settings are fixed cells on the Buttons sheet (no header search, by the user's
   choice): Bar Graph colour scheme G3, label direction H3, label font size I3; Line Graph Line F7, Color scheme G7, Marker Size H7,
-  Line Width I7, Label Position J7. If the user moves them, update the constants.
+  Line Width I7, Label Position J7, Label font size K7. If the user moves them, update the constants.
 - Numbers written into worksheet formulas go through `Num()` (locale-safe decimal point).
 
 ## Domain notes

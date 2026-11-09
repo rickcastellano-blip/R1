@@ -59,6 +59,7 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   | H7 | Marker Size: points (2–72); blank = default |
   | I7 | Line Width: points (0.25–10), line and marker outline; blank = default |
   | J7 | Label Position: right (default), above, below, left, or in (centred on the point) |
+  | K7 | Label font size: points (4–72); blank = 10 |
 
 - The legend goes in a corner where it covers no data (1 or 2 columns, raising the axes a
   step if needed), or outside the plot on the right when nothing fits.
