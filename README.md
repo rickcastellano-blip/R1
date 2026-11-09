@@ -60,7 +60,7 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   | I7 | Line Width: points (0.25–10), line and marker outline; blank = default |
   | J7 | Label Position: right (default), above, below, left, or in (centred on the point) |
   | K7 | Label font size: points (4–72); blank = 10 |
-  | L7 | Width: figure width in inches (1–20); blank = 5. Text and lines scale with it |
+  | L7 | Width: figure width in inches (1–20); blank = 5. Only the plot widens: height, text, lines and the left/right margins stay fixed |
 
 - The legend goes in a corner where it covers no data (1 or 2 columns, raising the axes a
   step if needed), or outside the plot on the right when nothing fits.
@@ -72,8 +72,8 @@ series (legend entry); each row within a block is a group on the x axis. A blank
 block; `#N/A` stays in it as a group with no bar. The series name is in the column left of
 the tag, on the block's first row. The column right of the values holds ± errors; bar labels
 (data tags) are text in that column (then no error bars), or whatever is in the next
-column (text or numbers, shown as displayed), drawn above the error bars. **Buttons!H3** sets their direction: `horiz` (default) or `vert`; **Buttons!I3** their font size in points (blank = 10). **Buttons!J3** sets the figure width in inches (blank = 5); text and
-lines scale with it. An empty column stops the search. The colour scheme is
+column (text or numbers, shown as displayed), drawn above the error bars. **Buttons!H3** sets their direction: `horiz` (default) or `vert`; **Buttons!I3** their font size in points (blank = 10). **Buttons!J3** sets the figure width in inches (blank = 5); only the
+plot widens (height, text, lines and the left/right margins stay fixed). An empty column stops the search. The colour scheme is
 **Buttons!G3**: standard (the xgrapher.m colour list, as in the Line Graph), or darkening
 pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red;
 just blue and red when there is only one pair), or darkening triplets (the same with gray as a

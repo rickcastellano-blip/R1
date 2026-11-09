@@ -205,10 +205,12 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Next j
 
     '--- 4. size + scaled type / line weights ------------------------------
-    ' whole pixels, so every chart of a width is the same size; type and line
-    ' weights below scale with the width, so a wider figure looks the same, larger
-    W = Px(ReadWidthIn() * 72): H = Px(W / MAT_ASPECT)
-    sc = W / MAT_FIG_W_PT
+    ' Only the width follows the Width cell: the height, type, line weights and
+    ' the plot's left and right margins stay those of the default width, so a
+    ' wider figure just has a wider plot (whole pixels, so every chart of a
+    ' width is the same size)
+    W = Px(ReadWidthIn() * 72): H = Px(BaseW() / MAT_ASPECT)
+    sc = BaseW() / MAT_FIG_W_PT
     fsT = Application.Max(1, Round(MAT_FS_TICKS * sc, 1))
     fsA = Application.Max(1, Round(MAT_FS_LABEL * sc, 1))
     fsL = fsT
@@ -452,13 +454,13 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     co.Activate
     For p = 1 To 2
         With ch.PlotArea
-            .InsideLeft = Px(PA_LEFT * W)
+            .InsideLeft = Px(PA_LEFT * BaseW())
             .InsideTop = Px(PA_TOP * H)
-            .InsideWidth = Px(PA_WIDTH * W)
+            .InsideWidth = Px(W - (1 - PA_WIDTH) * BaseW())
             .InsideHeight = Px(PA_HEIGHT * H)
         End With
     Next p
-    ch.Legend.Left = LG_RIGHT * W - ch.Legend.Width
+    ch.Legend.Left = W - (1 - LG_RIGHT) * BaseW() - ch.Legend.Width
     ch.Legend.Top = LG_TOP * H
     On Error GoTo 0
 
@@ -470,9 +472,9 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     On Error Resume Next
     For p = 1 To 2
         With ch.PlotArea
-            .InsideLeft = Px(PA_LEFT * W)
+            .InsideLeft = Px(PA_LEFT * BaseW())
             .InsideTop = Px(PA_TOP * H)
-            .InsideWidth = Px(PA_WIDTH * W)
+            .InsideWidth = Px(W - (1 - PA_WIDTH) * BaseW())
             .InsideHeight = Px(PA_HEIGHT * H)
         End With
     Next p
@@ -575,6 +577,12 @@ Private Sub NiceScale(ByVal raw As Double, ByRef axMax As Double, ByRef axStep A
     Next i
     axStep = e: axMax = e * (-Int(-raw / e))
 End Sub
+
+' The default figure width in points (CH_WIDTH_IN), whole pixels: the
+' height, type, weights and plot margins are set for this width.
+Private Function BaseW() As Double
+    BaseW = Px(CH_WIDTH_IN * 72)
+End Function
 
 ' Figure width in inches from the Width cell on the Buttons sheet (1-20);
 ' blank or not a number gives CH_WIDTH_IN.
@@ -837,8 +845,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         Next r
     Next j
 
-    pL = Px(PA_LEFT * W): pT = Px(PA_TOP * H): pW = Px(PA_WIDTH * W): pH = Px(PA_HEIGHT * H)
-    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
+    pL = Px(PA_LEFT * BaseW()): pT = Px(PA_TOP * H): pW = Px(W - (1 - PA_WIDTH) * BaseW()): pH = Px(PA_HEIGHT * H)
+    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * BaseW()
     insY = (LG_TOP - PA_TOP) * H
     ' Measure the legend as Excel lays it out on its own (one column, every
     ' entry shown) instead of estimating line heights, which clipped the
@@ -1118,21 +1126,21 @@ Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, B
     On Error Resume Next
     ch.Refresh
     DoEvents
-    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * W
+    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * BaseW()
     insY = (LG_TOP - PA_TOP) * H
     ' a chart widened for an outside legend can rescale the plot: put it back
     ' Excel can adjust one side of the plot box when another is set, so it is
     ' set until it reads back as asked (every chart gets the same plot box)
     For p = 1 To 4
         With ch.PlotArea
-            .InsideLeft = Px(PA_LEFT * W)
+            .InsideLeft = Px(PA_LEFT * BaseW())
             .InsideTop = Px(PA_TOP * H)
-            .InsideWidth = Px(PA_WIDTH * W)
+            .InsideWidth = Px(W - (1 - PA_WIDTH) * BaseW())
             .InsideHeight = Px(PA_HEIGHT * H)
         End With
-        If Abs(ch.PlotArea.InsideLeft - Px(PA_LEFT * W)) < 0.4 And _
+        If Abs(ch.PlotArea.InsideLeft - Px(PA_LEFT * BaseW())) < 0.4 And _
            Abs(ch.PlotArea.InsideTop - Px(PA_TOP * H)) < 0.4 And _
-           Abs(ch.PlotArea.InsideWidth - Px(PA_WIDTH * W)) < 0.4 And _
+           Abs(ch.PlotArea.InsideWidth - Px(W - (1 - PA_WIDTH) * BaseW())) < 0.4 And _
            Abs(ch.PlotArea.InsideHeight - Px(PA_HEIGHT * H)) < 0.4 Then Exit For
     Next p
     With ch.Legend
