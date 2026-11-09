@@ -26,6 +26,7 @@ Private Const LINE_CELL      As String = "F7"     ' 1 = connecting lines, 0 = ma
 Private Const SCHEME_CELL    As String = "G7"     ' standard / stoplight / green->red
 Private Const MARKER_CELL    As String = "H7"     ' marker size in pt (2-72); blank = default
 Private Const LINEW_CELL     As String = "I7"     ' line + marker outline width in pt; blank = default
+Private Const LBLPOS_CELL    As String = "J7"     ' point labels: right, above, below, left or in
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range
@@ -102,6 +103,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim axMax As Double, axStep As Double, axMin As Double
     Dim lblC() As Long, fsTx As Double, legCorner As Long, legExtraW As Double, legExtraH As Double
     Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
+    Dim lblPos As Long
 
     Dim nBlank As Long
 
@@ -212,7 +214,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     msz = Application.Min(72, Application.Max(2, Round(MAT_MS * sc * 0.5, 0)))
 
     '--- 4b. line / colour settings from the Buttons sheet ----------------
-    ReadSettings useLine, scheme, mSet, lwSet
+    ReadSettings useLine, scheme, mSet, lwSet, lblPos
     ' error bars use the marker outline width: Line Width (I7) when set, else
     ' the plot line width, or Excel's 0.75 pt default border for markers only
     If lwSet > 0 Then
@@ -326,7 +328,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
         For j = 1 To nBlk
             If lblC(j) > 0 Then
                 AddPointLabels ch.SeriesCollection(j), _
-                               tws.Cells(blkRow(j), lblC(j)).Resize(rc(j), 1), fsTx
+                               tws.Cells(blkRow(j), lblC(j)).Resize(rc(j), 1), fsTx, lblPos
             End If
         Next j
     End If
@@ -458,7 +460,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     ' pick the corner / column count that covers no data, raising the axis
     ' maxima if no corner is clear (falls back to top-right on any error)
     PlaceLegend ch, tws, W, H, nBlk, fsL * LG_LINESP, msz, fsTx, useLine, xLog, yLog, _
-                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC, legCorner, legExtraW, legExtraH
+                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC, lblPos, legCorner, legExtraW, legExtraH
 
     On Error Resume Next
     For p = 1 To 2
@@ -499,7 +501,7 @@ End Function
 
 ' Data labels to the right of each point, text taken from lblRng (xgrapher:
 ' text(x, y, label, 'HorizontalAlignment', 'left', 'VerticalAlignment', 'middle')).
-Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double)
+Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double, ByVal lblPos As Long)
     Dim i As Long, v As Variant, linked As Boolean
 
     ser.HasDataLabels = True
@@ -519,7 +521,8 @@ Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double)
         .ShowSeriesName = False
         .ShowCategoryName = False
         .ShowLegendKey = False
-        .Position = xlLabelPositionRight
+        .Position = lblPos
+        If lblPos = xlLabelPositionCenter Then .HorizontalAlignment = xlCenter
         .Font.Name = FONT_NAME
         .Font.Size = fs
         .Font.Bold = False
@@ -596,9 +599,9 @@ End Function
 '     blank or text keeps the defaults.
 ' Missing sheet or cells fall back to lines + standard + default size.
 Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef mSize As Double, _
-                         ByRef lineW As Double)
+                         ByRef lineW As Double, ByRef lblPos As Long)
     Dim ws As Worksheet, v As Variant
-    useLine = True: scheme = "standard": mSize = 0: lineW = 0
+    useLine = True: scheme = "standard": mSize = 0: lineW = 0: lblPos = xlLabelPositionRight
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
     On Error GoTo 0
@@ -629,6 +632,14 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef
         If lineW < 0.25 Then lineW = 0.25
         If lineW > 10 Then lineW = 10
     End If
+
+    ' point-label position; "in" = centred on the point, text centred
+    Select Case LCase$(CellText(ws.Range(LBLPOS_CELL).Value))
+        Case "above": lblPos = xlLabelPositionAbove
+        Case "below": lblPos = xlLabelPositionBelow
+        Case "left":  lblPos = xlLabelPositionLeft
+        Case "in":    lblPos = xlLabelPositionCenter
+    End Select
 End Sub
 
 ' One colour per series (1..n).
@@ -695,13 +706,15 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                         ByVal fsTx As Double, ByVal useLine As Boolean, _
                         ByVal xLog As Boolean, ByVal yLog As Boolean, _
                         blkRow() As Long, rc() As Long, ByVal xC As Long, ByVal yC As Long, _
-                        ByVal eC As Long, lblC() As Long, ByRef legCorner As Long, _
+                        ByVal eC As Long, lblC() As Long, ByVal lblPos As Long, _
+                        ByRef legCorner As Long, _
                         ByRef extraW As Double, ByRef extraH As Double)
     Dim oX() As Double, oY() As Double, offL() As Double, offT() As Double
     Dim offR() As Double, offB() As Double, nO As Long
     Dim sX1() As Double, sY1() As Double, sX2() As Double, sY2() As Double, nS As Long
     Dim j As Long, r As Long, tot As Long, x As Variant, y As Variant, e As Variant
     Dim txt As String, half As Double, hasPrev As Boolean, prevX As Double, prevY As Double
+    Dim tw As Double, th As Double
     Dim pL As Double, pT As Double, pW As Double, pH As Double, insX As Double, insY As Double
     Dim w1 As Double, h1 As Double, eW As Double, eH As Double, padW As Double, padH As Double
     Dim i As Long, xLo As Double, xHi As Double, yLo As Double, yHi As Double
@@ -734,8 +747,19 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                     If Len(txt) > 0 Then
                         nO = nO + 1
                         oX(nO) = CDbl(x): oY(nO) = CDbl(y)
-                        offL(nO) = half: offR(nO) = half + 4 + Len(txt) * fsTx * 0.55
-                        offT(nO) = -fsTx * 0.6: offB(nO) = fsTx * 0.6
+                        tw = Len(txt) * fsTx * 0.55: th = fsTx * 0.6
+                        Select Case lblPos           ' label box around the point (pt, y down)
+                            Case xlLabelPositionLeft
+                                offL(nO) = -half - 4 - tw: offR(nO) = -half: offT(nO) = -th: offB(nO) = th
+                            Case xlLabelPositionAbove
+                                offL(nO) = -tw / 2: offR(nO) = tw / 2: offT(nO) = -half - 4 - 2 * th: offB(nO) = -half
+                            Case xlLabelPositionBelow
+                                offL(nO) = -tw / 2: offR(nO) = tw / 2: offT(nO) = half: offB(nO) = half + 4 + 2 * th
+                            Case xlLabelPositionCenter
+                                offL(nO) = -tw / 2: offR(nO) = tw / 2: offT(nO) = -th: offB(nO) = th
+                            Case Else
+                                offL(nO) = half: offR(nO) = half + 4 + tw: offT(nO) = -th: offB(nO) = th
+                        End Select
                     End If
                 End If
                 If eC > 0 And lblC(j) <> eC Then
