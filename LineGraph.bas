@@ -619,6 +619,8 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef
         scheme = "stoplight"
     ElseIf Left$(v, 5) = "green" Then
         scheme = "gradient"
+    ElseIf v = "darkening pairs" Then
+        scheme = "pairs"
     End If
 
     v = ws.Range(MARKER_CELL).Value
@@ -654,6 +656,10 @@ End Sub
 '   stoplight - green, yellow, red, dark red, repeating after 4
 '   gradient  - hue slides from green (first series) to red (last) via yellow,
 '               leaving green quickly so neighbouring series differ
+'   pairs     - light blue, light red, blue, red, dark blue, dark red, repeating
+'               (as the Bar Graph's darkening pairs: standard blue and red,
+'               light = halfway to white, dark = 60 %); one pair (1-2 series)
+'               is just the standard blue and red
 Private Function SeriesColors(scheme As String, n As Long) As Long()
     Dim c() As Long, pal As Variant, i As Long, t As Double, hue As Double
 
@@ -662,6 +668,15 @@ Private Function SeriesColors(scheme As String, n As Long) As Long()
     Select Case scheme
         Case "stoplight"
             pal = Array(RGB(0, 150, 0), RGB(230, 190, 0), RGB(220, 20, 20), RGB(128, 0, 0))
+        Case "pairs"
+            If n <= 2 Then
+                pal = Array(RGB(4, 65, 215), RGB(225, 0, 21))
+            Else
+                pal = Array(RGB((4 + 255) \ 2, (65 + 255) \ 2, (215 + 255) \ 2), _
+                            RGB((225 + 255) \ 2, (0 + 255) \ 2, (21 + 255) \ 2), _
+                            RGB(4, 65, 215), RGB(225, 0, 21), _
+                            RGB(4 * 0.6, 65 * 0.6, 215 * 0.6), RGB(225 * 0.6, 0, 21 * 0.6))
+            End If
         Case "gradient"
             For i = 1 To n
                 If n > 1 Then t = (i - 1) / (n - 1) Else t = 0
