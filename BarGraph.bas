@@ -7,7 +7,8 @@ Private Const MAT_ASPECT    As Double = 1.375    ' 550/400
 Private Const MAT_FS_TICKS  As Double = 13.5     ' resize.m: axes FontSize
 Private Const MAT_FS_LABEL  As Double = 16       ' resize.m: x/ylabel FontSize
 Private Const MAT_LINEW     As Double = 0.5      ' MATLAB default line width
-Private Const CH_WIDTH_IN   As Double = 5     ' <-- set your output size here
+Private Const CH_WIDTH_IN   As Double = 5        ' default figure width (in) when the Width cell is blank
+Private Const WIDTH_CELL    As String = "J3"     ' figure width in inches (1-20)
 Private Const PA_LEFT       As Double = 0.1505   ' resize.m axes Position
 Private Const PA_TOP        As Double = 0.071
 Private Const PA_WIDTH      As Double = 0.8
@@ -138,7 +139,9 @@ Sub GenerateStrengthBarGraph()
     rot = 0: paH = PA_HEIGHT
 
     '--- 5. size + scaled type / line weights ------------------------------
-    W = Px(CH_WIDTH_IN * 72): H = Px(W / MAT_ASPECT)   ' whole pixels, so every chart is the same size
+    ' whole pixels, so every chart of a width is the same size; type and line
+    ' weights below scale with the width, so a wider figure looks the same, larger
+    W = Px(ReadWidthIn() * 72): H = Px(W / MAT_ASPECT)
     sc = W / MAT_FIG_W_PT
     fsT = Application.Max(1, Round(MAT_FS_TICKS * sc, 1))
     fsA = Application.Max(1, Round(MAT_FS_LABEL * sc, 1))
@@ -449,6 +452,21 @@ Private Sub AddBarLabels(ser As Series, lblRng As Range, ByVal vertLbl As Boolea
         End If
     Next i
 End Sub
+
+' Figure width in inches from the Width cell on the Buttons sheet (1-20);
+' blank or not a number gives CH_WIDTH_IN.
+Private Function ReadWidthIn() As Double
+    Dim ws As Worksheet, v As Variant
+    ReadWidthIn = CH_WIDTH_IN
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    v = ws.Range(WIDTH_CELL).Value
+    If IsNum(v) Then
+        If CDbl(v) > 0 Then ReadWidthIn = Application.Min(20, Application.Max(1, CDbl(v)))
+    End If
+End Function
 
 ' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
 ' Excel never has to round it differently from one chart to the next.
