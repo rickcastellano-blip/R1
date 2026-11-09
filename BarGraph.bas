@@ -798,6 +798,7 @@ Private Function ReadScheme() As String
     Select Case LCase$(CellText(ws.Range(SCHEME_CELL).Value))
         Case "darkening pairs": ReadScheme = "pairs"
         Case "darkening triplets": ReadScheme = "triplets"
+        Case "pairs": ReadScheme = "lightpairs"
     End Select
 End Function
 
@@ -810,6 +811,9 @@ End Function
 '   of the colour. Gray is (72,72,72), light gray halfway to white, and the
 '   darkest is the standard black. A single pair / triplet (n up to 2 / 3) is
 '   just the middle row (blue, red, gray).
+'   lightpairs - ("pairs") each standard colour as a light / full pair, in the
+'              standard order: light blue, blue, light red, red, gray, black,
+'              ..., repeating after 26; light = halfway to white
 Private Function BarColors(scheme As String, n As Long) As Long()
     Dim c() As Long, pal As Variant, hues As Variant, i As Long, k As Long
     Dim hR As Long, hG As Long, hB As Long
@@ -841,6 +845,17 @@ Private Function BarColors(scheme As String, n As Long) As Long()
                     RGB(5, 66, 105), RGB(140, 87, 5), RGB(115, 5, 5), RGB(50, 21, 79), _
                     RGB(36, 186, 120), RGB(184, 93, 33), RGB(237, 143, 136), _
                     RGB(224, 219, 110), RGB(157, 162, 248))
+        If scheme = "lightpairs" Then
+            hues = pal
+            ReDim pal(0 To 2 * (UBound(hues) + 1) - 1)
+            For k = 0 To UBound(hues)
+                hR = hues(k) And &HFF&
+                hG = (hues(k) \ &H100&) And &HFF&
+                hB = (hues(k) \ &H10000) And &HFF&
+                pal(2 * k) = RGB((hR + 255) \ 2, (hG + 255) \ 2, (hB + 255) \ 2)
+                pal(2 * k + 1) = hues(k)
+            Next k
+        End If
     End If
     For i = 1 To n
         c(i) = pal((i - 1) Mod (UBound(pal) + 1))
