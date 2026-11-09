@@ -55,7 +55,7 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   | Cell | Setting |
   |---|---|
   | F7 | Line: 1 = connecting lines, 0 = markers only |
-  | G7 | Color scheme: standard, stoplight, green→red, darkening pairs (as the Bar Graph's) |
+  | G7 | Color scheme: standard, stoplight, green→red, darkening pairs (as the Bar Graph's), pairs (light/full of each standard colour: light blue, blue, light red, red, gray, black, ...) |
   | H7 | Marker Size: points (2–72); blank = default |
   | I7 | Line Width: points (0.25–10), line and marker outline; blank = default |
   | J7 | Label Position: right (default), above, below, left, or in (centred on the point) |

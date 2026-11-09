@@ -621,6 +621,8 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef
         scheme = "gradient"
     ElseIf v = "darkening pairs" Then
         scheme = "pairs"
+    ElseIf v = "pairs" Then
+        scheme = "lightpairs"
     End If
 
     v = ws.Range(MARKER_CELL).Value
@@ -660,8 +662,12 @@ End Sub
 '               (as the Bar Graph's darkening pairs: standard blue and red,
 '               light = halfway to white, dark = 60 %); one pair (1-2 series)
 '               is just the standard blue and red
+'   lightpairs - ("pairs") each standard colour as a light / full pair, in the
+'               standard order: light blue, blue, light red, red, gray, black,
+'               ..., repeating after 26; light = halfway to white
 Private Function SeriesColors(scheme As String, n As Long) As Long()
     Dim c() As Long, pal As Variant, i As Long, t As Double, hue As Double
+    Dim std As Variant, k As Long
 
     If n < 1 Then n = 1
     ReDim c(1 To n)
@@ -677,6 +683,18 @@ Private Function SeriesColors(scheme As String, n As Long) As Long()
                             RGB(4, 65, 215), RGB(225, 0, 21), _
                             RGB(4 * 0.6, 65 * 0.6, 215 * 0.6), RGB(225 * 0.6, 0, 21 * 0.6))
             End If
+        Case "lightpairs"
+            std = Array(RGB(4, 65, 215), RGB(225, 0, 21), RGB(20, 20, 20), RGB(23, 105, 14), _
+                        RGB(5, 66, 105), RGB(140, 87, 5), RGB(115, 5, 5), RGB(50, 21, 79), _
+                        RGB(36, 186, 120), RGB(184, 93, 33), RGB(237, 143, 136), _
+                        RGB(224, 219, 110), RGB(157, 162, 248))
+            ReDim pal(0 To 2 * (UBound(std) + 1) - 1)
+            For k = 0 To UBound(std)
+                pal(2 * k) = RGB(((std(k) And &HFF&) + 255) \ 2, _
+                                 (((std(k) \ &H100&) And &HFF&) + 255) \ 2, _
+                                 (((std(k) \ &H10000) And &HFF&) + 255) \ 2)
+                pal(2 * k + 1) = std(k)
+            Next k
         Case "gradient"
             For i = 1 To n
                 If n > 1 Then t = (i - 1) / (n - 1) Else t = 0
