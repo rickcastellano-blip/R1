@@ -66,6 +66,8 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   step if needed), or outside the plot on the right when nothing fits.
 - Point labels are kept inside the plot and off the legend (axes widened a step at a time).
 - Both graphs: no fill behind the figure, white behind the axes.
+- Both graphs save a PNG of every chart to a **Fig Pix** folder next to the workbook
+  (`<sheet> <chart name>.png`; a OneDrive workbook uses its synced local folder).
 
 ## Bar Graph
 

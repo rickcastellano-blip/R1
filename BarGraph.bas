@@ -20,6 +20,7 @@ Private Const TICK_OFFSET   As Long = 20
 Private Const GAP_GROUPED   As Long = 150
 ' colour scheme cell on the Buttons sheet of this workbook: standard / darkening pairs
 Private Const SETTINGS_SHEET As String = "Buttons"
+Private Const FIG_FOLDER    As String = "Fig Pix"   ' PNG of every chart, next to the workbook
 Private Const SCHEME_CELL    As String = "G3"
 Private Const LABELDIR_CELL  As String = "H3"   ' bar labels: horiz or vert
 Private Const LABELFS_CELL   As String = "I3"   ' bar-label font size (pt); blank = LABEL_FS
@@ -351,6 +352,7 @@ Sub GenerateStrengthBarGraph()
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
     FitBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC, legCorner, W, H
     ch.Refresh                               ' draw the final layout now
+    SaveFigure co                            ' PNG copy in <workbook folder>\Fig Pix
 End Sub
 
 ' Keeps every bar label inside the plot box and off the legend: while any
@@ -526,6 +528,62 @@ Private Function ReadWidthIn() As Double
     If IsNum(v) Then
         If CDbl(v) > 0 Then ReadWidthIn = Application.Min(20, Application.Max(1, CDbl(v)))
     End If
+End Function
+
+' Saves the finished chart as a PNG in the "Fig Pix" folder next to the
+' workbook (made if missing), named <sheet> <chart name>.png. A workbook saved
+' to OneDrive / SharePoint reports a web address as its path, so that is
+' turned back into the local synced folder. Says so only if it fails.
+Private Sub SaveFigure(co As ChartObject)
+    Dim dir0 As String, fName As String, bad As Variant
+
+    dir0 = LocalPath(ThisWorkbook.Path)
+    If Len(dir0) = 0 Then
+        MsgBox "The chart was made, but no PNG was saved: the workbook has no local folder" & _
+               " (save it first, or check that OneDrive is syncing).", vbExclamation
+        Exit Sub
+    End If
+    dir0 = dir0 & "\" & FIG_FOLDER
+    fName = co.Parent.Name & " " & co.Name
+    For Each bad In Array("\", "/", ":", "*", "?", Chr(34), "<", ">", "|")
+        fName = Replace(fName, bad, "_")
+    Next bad
+
+    On Error GoTo Fail
+    If Len(Dir(dir0, vbDirectory)) = 0 Then MkDir dir0
+    co.Chart.Export Filename:=dir0 & "\" & fName & ".png", FilterName:="PNG"
+    Exit Sub
+Fail:
+    MsgBox "The chart was made, but the PNG could not be saved to" & vbCrLf & dir0 & _
+           vbCrLf & vbCrLf & Err.Description, vbExclamation
+End Sub
+
+' A local folder for a workbook path; an https OneDrive / SharePoint address
+' is mapped onto the synced OneDrive folder (personal: after the 4th "/",
+' business: after "/Documents"). "" if no local folder is found.
+Private Function LocalPath(ByVal p As String) As String
+    Dim k As Long, i As Long, rest As String, root As Variant
+    If LCase$(Left$(p, 4)) <> "http" Then LocalPath = p: Exit Function
+    k = InStr(1, p, "/Documents/", vbTextCompare)
+    If k > 0 Then
+        rest = Mid$(p, k + Len("/Documents/"))
+    Else
+        k = 0
+        For i = 1 To 4                           ' https://d.docs.live.net/<id>/...
+            k = InStr(k + 1, p, "/")
+            If k = 0 Then Exit Function
+        Next i
+        rest = Mid$(p, k + 1)
+    End If
+    rest = Replace(rest, "/", "\")
+    For Each root In Array(Environ$("OneDriveCommercial"), Environ$("OneDriveConsumer"), Environ$("OneDrive"))
+        If Len(root) > 0 Then
+            If Len(Dir(root & "\" & rest, vbDirectory)) > 0 Then
+                LocalPath = root & "\" & rest
+                Exit Function
+            End If
+        End If
+    Next root
 End Function
 
 ' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
