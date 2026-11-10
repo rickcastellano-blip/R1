@@ -612,8 +612,9 @@ Private Sub SaveFigure(co As ChartObject)
 
     dir0 = LocalPath(ThisWorkbook.Path)
     If Len(dir0) = 0 Then
-        MsgBox "The chart was made, but no PNG was saved: the workbook has no local folder" & _
-               " (save it first, or check that OneDrive is syncing).", vbExclamation
+        MsgBox "The chart was made, but no PNG was saved: no local folder was found for" & _
+               vbCrLf & ThisWorkbook.Path & vbCrLf & vbCrLf & _
+               "(save the workbook first, or check that OneDrive is syncing it).", vbExclamation
         Exit Sub
     End If
     dir0 = dir0 & "\" & FIG_FOLDER
@@ -631,12 +632,43 @@ Fail:
            vbCrLf & vbCrLf & Err.Description, vbExclamation
 End Sub
 
-' A local folder for a workbook path; an https OneDrive / SharePoint address
-' is mapped onto the synced OneDrive folder (personal: after the 4th "/",
-' business: after "/Documents"). "" if no local folder is found.
+' A local folder for a workbook path. An https OneDrive / SharePoint address
+' is mapped onto its synced folder: first from OneDrive's own list of synced
+' libraries in the registry (web address -> local folder), then by guessing
+' from the OneDrive folders in the environment. "" if no local folder is found.
 Private Function LocalPath(ByVal p As String) As String
-    Dim k As Long, i As Long, rest As String, root As Variant
+    Const HKCU As Long = &H80000001
+    Const PROV As String = "Software\SyncEngines\Providers\OneDrive"
+    Dim reg As Object, keys As Variant, kk As Variant, ns As String, mp As String
+    Dim k As Long, i As Long, rest As String, root As Variant, cand As String
+
     If LCase$(Left$(p, 4)) <> "http" Then LocalPath = p: Exit Function
+    p = Replace(p, "%20", " ")
+
+    On Error Resume Next
+    Set reg = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
+    If Not reg Is Nothing Then
+        reg.EnumKey HKCU, PROV, keys
+        If IsArray(keys) Then
+            For Each kk In keys
+                ns = "": mp = ""
+                reg.GetStringValue HKCU, PROV & "\" & kk, "UrlNamespace", ns
+                reg.GetStringValue HKCU, PROV & "\" & kk, "MountPoint", mp
+                ns = Replace(ns, "%20", " ")
+                If Len(ns) > 0 And Len(mp) > 0 Then
+                    If Right$(ns, 1) <> "/" Then ns = ns & "/"
+                    If StrComp(Left$(p & "/", Len(ns)), ns, vbTextCompare) = 0 Then
+                        cand = mp & "\" & Replace(Mid$(p, Len(ns) + 1), "/", "\")
+                        If Right$(cand, 1) = "\" Then cand = Left$(cand, Len(cand) - 1)
+                        If Len(Dir(cand, vbDirectory)) > 0 Then LocalPath = cand: Exit Function
+                    End If
+                End If
+            Next kk
+        End If
+    End If
+    On Error GoTo 0
+
+    ' fallback: personal = after the 4th "/", business = after "/Documents/"
     k = InStr(1, p, "/Documents/", vbTextCompare)
     If k > 0 Then
         rest = Mid$(p, k + Len("/Documents/"))
