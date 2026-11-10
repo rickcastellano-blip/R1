@@ -825,6 +825,7 @@ Private Function ReadScheme() As String
         Case "darkening pairs": ReadScheme = "pairs"
         Case "darkening triplets": ReadScheme = "triplets"
         Case "pairs": ReadScheme = "lightpairs"
+        Case "triplets": ReadScheme = "lighttriplets"
     End Select
 End Function
 
@@ -840,6 +841,9 @@ End Function
 '   lightpairs - ("pairs") each standard colour as a light / full pair, in the
 '              standard order: light blue, blue, light red, red, gray, black,
 '              ..., repeating after 26; light = halfway to white
+'   lighttriplets - ("triplets") the same with a dark one after each pair:
+'              light blue, blue, dark blue, light red, red, dark red, ...,
+'              repeating after 39; dark = 60 % of the colour
 Private Function BarColors(scheme As String, n As Long) As Long()
     Dim c() As Long, pal As Variant, hues As Variant, i As Long, k As Long
     Dim hR As Long, hG As Long, hB As Long
@@ -871,15 +875,17 @@ Private Function BarColors(scheme As String, n As Long) As Long()
                     RGB(5, 66, 105), RGB(140, 87, 5), RGB(115, 5, 5), RGB(50, 21, 79), _
                     RGB(36, 186, 120), RGB(184, 93, 33), RGB(237, 143, 136), _
                     RGB(224, 219, 110), RGB(157, 162, 248))
-        If scheme = "lightpairs" Then
+        If scheme = "lightpairs" Or scheme = "lighttriplets" Then
+            If scheme = "lightpairs" Then i = 2 Else i = 3     ' colours per group
             hues = pal
-            ReDim pal(0 To 2 * (UBound(hues) + 1) - 1)
+            ReDim pal(0 To i * (UBound(hues) + 1) - 1)
             For k = 0 To UBound(hues)
                 hR = hues(k) And &HFF&
                 hG = (hues(k) \ &H100&) And &HFF&
                 hB = (hues(k) \ &H10000) And &HFF&
-                pal(2 * k) = RGB((hR + 255) \ 2, (hG + 255) \ 2, (hB + 255) \ 2)
-                pal(2 * k + 1) = hues(k)
+                pal(i * k) = RGB((hR + 255) \ 2, (hG + 255) \ 2, (hB + 255) \ 2)
+                pal(i * k + 1) = hues(k)
+                If i = 3 Then pal(i * k + 2) = RGB(hR * 0.6, hG * 0.6, hB * 0.6)
             Next k
         End If
     End If
