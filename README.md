@@ -67,7 +67,8 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 - Point labels are kept inside the plot and off the legend (axes widened a step at a time).
 - Both graphs: no fill behind the figure, white behind the axes.
 - Both graphs save a PNG of every chart (`<sheet> <chart name>.png`) to the fixed folder
-  `FIG_DIR` at the top of each module (the team's OneDrive `General\Fig Pix`).
+  `FIG_DIR` at the top of each module (the team's OneDrive `General\Fig Pix`), drawn at 4x size
+  (`FIG_SCALE`, about 384 dpi).
 
 ## Bar Graph
 

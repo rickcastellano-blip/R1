@@ -22,6 +22,7 @@ Private Const GAP_GROUPED   As Long = 150
 Private Const SETTINGS_SHEET As String = "Buttons"
 Private Const FIG_DIR       As String = _
     "C:\Users\rcastellano\OneDrive - Chasm Advanced Materials\Performance Additives Team\General\Fig Pix"   ' PNG of every chart
+Private Const FIG_SCALE     As Double = 4    ' PNG drawn this many times the chart size (~384 dpi)
 Private Const SCHEME_CELL    As String = "G3"
 Private Const LABELDIR_CELL  As String = "H3"   ' bar labels: horiz or vert
 Private Const LABELFS_CELL   As String = "I3"   ' bar-label font size (pt); blank = LABEL_FS
@@ -532,9 +533,13 @@ Private Function ReadWidthIn() As Double
 End Function
 
 ' Saves the finished chart as a PNG in FIG_DIR (made if missing), named
-' <sheet> <chart name>.png. Silent: if it fails, no PNG and no message.
+' <sheet> <chart name>.png. Chart.Export draws at screen resolution, so the
+' chart is copied as a vector picture, pasted into a temporary chart FIG_SCALE
+' times the size and exported from there (sharp at print size); if that fails,
+' the chart is exported as is. Silent: if it fails, no PNG and no message.
 Private Sub SaveFigure(co As ChartObject)
-    Dim fName As String, bad As Variant
+    Dim fName As String, bad As Variant, path As String
+    Dim tmp As ChartObject, shp As Shape, ok As Boolean, tries As Long, prevSel As Object
 
     fName = co.Parent.Name & " " & co.Name
     For Each bad In Array("\", "/", ":", "*", "?", Chr(34), "<", ">", "|")
@@ -542,8 +547,39 @@ Private Sub SaveFigure(co As ChartObject)
     Next bad
 
     On Error Resume Next
+    Set prevSel = Selection
     If Len(Dir(FIG_DIR, vbDirectory)) = 0 Then MkDir FIG_DIR
-    co.Chart.Export Filename:=FIG_DIR & "\" & fName & ".png", FilterName:="PNG"
+    path = FIG_DIR & "\" & fName & ".png"
+
+    For tries = 1 To 3                           ' the clipboard is sometimes busy
+        Err.Clear
+        co.Chart.CopyPicture Appearance:=xlScreen, Format:=xlPicture
+        If Err.Number = 0 Then Exit For
+        DoEvents
+    Next tries
+    If Err.Number = 0 Then
+        Set tmp = co.Parent.ChartObjects.Add(co.Left, co.Top, co.Width * FIG_SCALE, co.Height * FIG_SCALE)
+        If Not tmp Is Nothing Then
+            tmp.Chart.ChartArea.Format.Fill.Visible = msoFalse
+            tmp.Chart.ChartArea.Format.Line.Visible = msoFalse
+            tmp.Activate                         ' a pasted picture exports blank otherwise
+            tmp.Chart.Paste
+            If tmp.Chart.Shapes.Count > 0 Then
+                Set shp = tmp.Chart.Shapes(tmp.Chart.Shapes.Count)
+                shp.LockAspectRatio = msoFalse
+                shp.Left = 0: shp.Top = 0
+                shp.Width = tmp.Chart.ChartArea.Width
+                shp.Height = tmp.Chart.ChartArea.Height
+                DoEvents
+                Err.Clear
+                ok = tmp.Chart.Export(Filename:=path, FilterName:="PNG")
+                If Err.Number <> 0 Then ok = False
+            End If
+            tmp.Delete
+        End If
+    End If
+    If Not ok Then co.Chart.Export Filename:=path, FilterName:="PNG"
+    If Not prevSel Is Nothing Then prevSel.Select
     On Error GoTo 0
 End Sub
 
