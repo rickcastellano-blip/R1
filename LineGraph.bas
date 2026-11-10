@@ -605,7 +605,7 @@ Private Function ReadWidthIn() As Double
 End Function
 
 ' Saves the finished chart as a PNG in FIG_DIR (made if missing), named
-' <sheet> <chart name>.png. Says so only if it fails.
+' <sheet> <chart name>.png. Silent: if it fails, no PNG and no message.
 Private Sub SaveFigure(co As ChartObject)
     Dim fName As String, bad As Variant
 
@@ -614,13 +614,10 @@ Private Sub SaveFigure(co As ChartObject)
         fName = Replace(fName, bad, "_")
     Next bad
 
-    On Error GoTo Fail
+    On Error Resume Next
     If Len(Dir(FIG_DIR, vbDirectory)) = 0 Then MkDir FIG_DIR
     co.Chart.Export Filename:=FIG_DIR & "\" & fName & ".png", FilterName:="PNG"
-    Exit Sub
-Fail:
-    MsgBox "The chart was made, but the PNG could not be saved to" & vbCrLf & FIG_DIR & _
-           vbCrLf & vbCrLf & Err.Description, vbExclamation
+    On Error GoTo 0
 End Sub
 
 ' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
