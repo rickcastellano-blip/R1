@@ -22,7 +22,8 @@ Private Const DO_LABELS     As Boolean = True    ' xgrapher: dolabels
 Private Const LABEL_FS      As Double = 10       ' point-label font size (pt, not scaled)
 ' settings cells on the Buttons sheet of this workbook
 Private Const SETTINGS_SHEET As String = "Buttons"
-Private Const FIG_FOLDER    As String = "Fig Pix"   ' PNG of every chart, next to the workbook
+Private Const FIG_DIR       As String = _
+    "C:\Users\rcastellano\OneDrive - Chasm Advanced Materials\Performance Additives Team\General\Fig Pix"   ' PNG of every chart
 ' settings cells (fixed addresses) on that sheet
 Private Const LINE_CELL      As String = "F7"     ' 1 = connecting lines, 0 = markers only
 Private Const SCHEME_CELL    As String = "G7"     ' standard / stoplight / green->red
@@ -491,7 +492,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
     If DO_LABELS Then FitPointLabels ch, nBlk, lblC, legCorner, xLog, yLog, W, H
     ch.Refresh                               ' draw the final layout now
-    SaveFigure co                            ' PNG copy in <workbook folder>\Fig Pix
+    SaveFigure co                            ' PNG copy in FIG_DIR
 End Sub
 
 ' True if every cell in column c, rows r0..r0+n-1, is empty.
@@ -603,93 +604,24 @@ Private Function ReadWidthIn() As Double
     End If
 End Function
 
-' Saves the finished chart as a PNG in the "Fig Pix" folder next to the
-' workbook (made if missing), named <sheet> <chart name>.png. A workbook saved
-' to OneDrive / SharePoint reports a web address as its path, so that is
-' turned back into the local synced folder. Says so only if it fails.
+' Saves the finished chart as a PNG in FIG_DIR (made if missing), named
+' <sheet> <chart name>.png. Says so only if it fails.
 Private Sub SaveFigure(co As ChartObject)
-    Dim dir0 As String, fName As String, bad As Variant
+    Dim fName As String, bad As Variant
 
-    dir0 = LocalPath(ThisWorkbook.Path)
-    If Len(dir0) = 0 Then
-        MsgBox "The chart was made, but no PNG was saved: no local folder was found for" & _
-               vbCrLf & ThisWorkbook.Path & vbCrLf & vbCrLf & _
-               "(save the workbook first, or check that OneDrive is syncing it).", vbExclamation
-        Exit Sub
-    End If
-    dir0 = dir0 & "\" & FIG_FOLDER
     fName = co.Parent.Name & " " & co.Name
     For Each bad In Array("\", "/", ":", "*", "?", Chr(34), "<", ">", "|")
         fName = Replace(fName, bad, "_")
     Next bad
 
     On Error GoTo Fail
-    If Len(Dir(dir0, vbDirectory)) = 0 Then MkDir dir0
-    co.Chart.Export Filename:=dir0 & "\" & fName & ".png", FilterName:="PNG"
+    If Len(Dir(FIG_DIR, vbDirectory)) = 0 Then MkDir FIG_DIR
+    co.Chart.Export Filename:=FIG_DIR & "\" & fName & ".png", FilterName:="PNG"
     Exit Sub
 Fail:
-    MsgBox "The chart was made, but the PNG could not be saved to" & vbCrLf & dir0 & _
+    MsgBox "The chart was made, but the PNG could not be saved to" & vbCrLf & FIG_DIR & _
            vbCrLf & vbCrLf & Err.Description, vbExclamation
 End Sub
-
-' A local folder for a workbook path. An https OneDrive / SharePoint address
-' is mapped onto its synced folder: first from OneDrive's own list of synced
-' libraries in the registry (web address -> local folder), then by guessing
-' from the OneDrive folders in the environment. "" if no local folder is found.
-Private Function LocalPath(ByVal p As String) As String
-    Const HKCU As Long = &H80000001
-    Const PROV As String = "Software\SyncEngines\Providers\OneDrive"
-    Dim reg As Object, keys As Variant, kk As Variant, ns As String, mp As String
-    Dim k As Long, i As Long, rest As String, root As Variant, cand As String
-
-    If LCase$(Left$(p, 4)) <> "http" Then LocalPath = p: Exit Function
-    p = Replace(p, "%20", " ")
-
-    On Error Resume Next
-    Set reg = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
-    If Not reg Is Nothing Then
-        reg.EnumKey HKCU, PROV, keys
-        If IsArray(keys) Then
-            For Each kk In keys
-                ns = "": mp = ""
-                reg.GetStringValue HKCU, PROV & "\" & kk, "UrlNamespace", ns
-                reg.GetStringValue HKCU, PROV & "\" & kk, "MountPoint", mp
-                ns = Replace(ns, "%20", " ")
-                If Len(ns) > 0 And Len(mp) > 0 Then
-                    If Right$(ns, 1) <> "/" Then ns = ns & "/"
-                    If StrComp(Left$(p & "/", Len(ns)), ns, vbTextCompare) = 0 Then
-                        cand = mp & "\" & Replace(Mid$(p, Len(ns) + 1), "/", "\")
-                        If Right$(cand, 1) = "\" Then cand = Left$(cand, Len(cand) - 1)
-                        If Len(Dir(cand, vbDirectory)) > 0 Then LocalPath = cand: Exit Function
-                    End If
-                End If
-            Next kk
-        End If
-    End If
-    On Error GoTo 0
-
-    ' fallback: personal = after the 4th "/", business = after "/Documents/"
-    k = InStr(1, p, "/Documents/", vbTextCompare)
-    If k > 0 Then
-        rest = Mid$(p, k + Len("/Documents/"))
-    Else
-        k = 0
-        For i = 1 To 4                           ' https://d.docs.live.net/<id>/...
-            k = InStr(k + 1, p, "/")
-            If k = 0 Then Exit Function
-        Next i
-        rest = Mid$(p, k + 1)
-    End If
-    rest = Replace(rest, "/", "\")
-    For Each root In Array(Environ$("OneDriveCommercial"), Environ$("OneDriveConsumer"), Environ$("OneDrive"))
-        If Len(root) > 0 Then
-            If Len(Dir(root & "\" & rest, vbDirectory)) > 0 Then
-                LocalPath = root & "\" & rest
-                Exit Function
-            End If
-        End If
-    Next root
-End Function
 
 ' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
 ' Excel never has to round it differently from one chart to the next.
