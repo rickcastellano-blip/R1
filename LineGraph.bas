@@ -321,9 +321,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Next j
 
     '--- 7. chart area / fonts --------------------------------------------
-    With ch.ChartArea
-        .Format.Fill.Visible = msoTrue
-        .Format.Fill.ForeColor.RGB = RGB(255, 255, 255)
+    With ch.ChartArea                            ' figure background: no fill
+        .Format.Fill.Visible = msoFalse
         .Format.Line.Visible = msoFalse
     End With
     With ch.ChartArea.Font
@@ -440,8 +439,10 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     On Error GoTo 0
 
     '--- 10. plot box -----------------------------------------------------
-    With ch.PlotArea
-        .Format.Fill.Visible = msoFalse
+    With ch.PlotArea                             ' axis background: white
+        .Format.Fill.Visible = msoTrue
+        .Format.Fill.Solid
+        .Format.Fill.ForeColor.RGB = RGB(255, 255, 255)
         .Format.Line.Visible = msoTrue
         .Format.Line.ForeColor.RGB = RGB(0, 0, 0)
         .Format.Line.Weight = wAX
@@ -487,6 +488,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     On Error GoTo 0
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
+    If DO_LABELS Then FitPointLabels ch, nBlk, lblC, legCorner, xLog, yLog, W, H
     ch.Refresh                               ' draw the final layout now
 End Sub
 
@@ -1115,6 +1117,73 @@ Private Sub NiceRange(ByVal lo As Double, ByVal hi As Double, ByRef axMin As Dou
         Exit Sub
     End If
     axMin = Round(a, 12): axMax = Round(b, 12): axStep = Round(s, 12)
+End Sub
+
+' Keeps every point label inside the plot box and off the legend: a label
+' past an edge moves that axis bound out a step (x10 on a log axis), and one
+' touching the legend raises the Y maximum (legend at the top) or lowers the
+' Y minimum (legend at the bottom); up to 6 rounds.
+Private Sub FitPointLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal legCorner As Long, _
+                           ByVal xLog As Boolean, ByVal yLog As Boolean, _
+                           ByVal W As Double, ByVal H As Double)
+    Dim iter As Long, j As Long, i As Long, hasLbl As Boolean
+    Dim goUp As Boolean, goDown As Boolean, goLeft As Boolean, goRight As Boolean
+    Dim pL As Double, pT As Double, pR As Double, pB As Double
+    Dim gL As Double, gT As Double, gR As Double, gB As Double
+    Dim dl As DataLabel
+    For j = 1 To n
+        If lblC(j) > 0 Then hasLbl = True
+    Next j
+    If Not hasLbl Then Exit Sub
+    On Error Resume Next
+    For iter = 0 To 6
+        ch.Refresh
+        DoEvents
+        pL = ch.PlotArea.InsideLeft: pT = ch.PlotArea.InsideTop
+        pR = pL + ch.PlotArea.InsideWidth: pB = pT + ch.PlotArea.InsideHeight
+        If legCorner >= 0 And legCorner <= 3 Then
+            gL = ch.Legend.Left: gT = ch.Legend.Top
+            gR = gL + ch.Legend.Width: gB = gT + ch.Legend.Height
+        End If
+        goUp = False: goDown = False: goLeft = False: goRight = False
+        For j = 1 To n
+            If lblC(j) > 0 Then
+                For i = 1 To ch.SeriesCollection(j).Points.Count
+                    If ch.SeriesCollection(j).Points(i).HasDataLabel Then
+                        Set dl = ch.SeriesCollection(j).Points(i).DataLabel
+                        If dl.Top < pT Then goUp = True
+                        If dl.Top + dl.Height > pB Then goDown = True
+                        If dl.Left < pL Then goLeft = True
+                        If dl.Left + dl.Width > pR Then goRight = True
+                        If legCorner >= 0 And legCorner <= 3 Then
+                            If dl.Left < gR And dl.Left + dl.Width > gL And _
+                               dl.Top < gB And dl.Top + dl.Height > gT Then
+                                If legCorner < 2 Then goUp = True Else goDown = True
+                            End If
+                        End If
+                    End If
+                Next i
+            End If
+        Next j
+        If Not (goUp Or goDown Or goLeft Or goRight) Or iter = 6 Then Exit For
+        With ch.Axes(xlValue)
+            If goUp Then
+                If yLog Then .MaximumScale = .MaximumScale * 10 Else .MaximumScale = .MaximumScale + .MajorUnit
+            End If
+            If goDown Then
+                If yLog Then .MinimumScale = .MinimumScale / 10 Else .MinimumScale = .MinimumScale - .MajorUnit
+            End If
+        End With
+        With ch.Axes(xlCategory)
+            If goRight Then
+                If xLog Then .MaximumScale = .MaximumScale * 10 Else .MaximumScale = .MaximumScale + .MajorUnit
+            End If
+            If goLeft Then
+                If xLog Then .MinimumScale = .MinimumScale / 10 Else .MinimumScale = .MinimumScale - .MajorUnit
+            End If
+        End With
+        AnchorLegend ch, legCorner, W, H
+    Next iter
 End Sub
 
 ' Align the legend to its corner of the plot box as finally drawn, using the

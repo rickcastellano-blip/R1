@@ -216,9 +216,8 @@ Sub GenerateStrengthBarGraph()
     End With
 
     '--- 8. chart area / fonts --------------------------------------------
-    With ch.ChartArea
-        .Format.Fill.Visible = msoTrue
-        .Format.Fill.ForeColor.RGB = RGB(255, 255, 255)
+    With ch.ChartArea                            ' figure background: no fill
+        .Format.Fill.Visible = msoFalse
         .Format.Line.Visible = msoFalse
     End With
     With ch.ChartArea.Font
@@ -300,8 +299,10 @@ Sub GenerateStrengthBarGraph()
     On Error GoTo 0
 
     '--- 11. plot box -----------------------------------------------------
-    With ch.PlotArea
-        .Format.Fill.Visible = msoFalse
+    With ch.PlotArea                             ' axis background: white
+        .Format.Fill.Visible = msoTrue
+        .Format.Fill.Solid
+        .Format.Fill.ForeColor.RGB = RGB(255, 255, 255)
         .Format.Line.Visible = msoTrue
         .Format.Line.ForeColor.RGB = RGB(0, 0, 0)
         .Format.Line.Weight = wAX
@@ -348,8 +349,58 @@ Sub GenerateStrengthBarGraph()
 
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
-    LiftBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC
+    FitBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC, legCorner, W, H
     ch.Refresh                               ' draw the final layout now
+End Sub
+
+' Keeps every bar label inside the plot box and off the legend: while any
+' label pokes out of the top or touches the legend, the Y maximum goes up a
+' step (up to 6) and the labels are placed again.
+Private Sub FitBarLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow() As Long, _
+                         rc() As Long, ByVal valC As Long, ByVal errC As Long, lblC() As Long, _
+                         ByVal legCorner As Long, ByVal W As Double, ByVal H As Double)
+    Dim iter As Long, j As Long, i As Long, bad As Boolean, hasLbl As Boolean
+    Dim pT As Double, gL As Double, gT As Double, gR As Double, gB As Double
+    Dim dl As DataLabel
+    For j = 1 To n
+        If lblC(j) > 0 Then hasLbl = True
+    Next j
+    If Not hasLbl Then Exit Sub
+    On Error Resume Next
+    For iter = 0 To 6
+        If iter > 0 Then
+            With ch.Axes(xlValue)
+                .MaximumScale = .MaximumScale + .MajorUnit
+            End With
+            AnchorLegend ch, legCorner, W, H
+        End If
+        LiftBarLabels ch, tws, n, blkRow, rc, valC, errC, lblC
+        ch.Refresh
+        DoEvents
+        pT = ch.PlotArea.InsideTop
+        If legCorner >= 0 And legCorner <= 3 Then
+            gL = ch.Legend.Left: gT = ch.Legend.Top
+            gR = gL + ch.Legend.Width: gB = gT + ch.Legend.Height
+        End If
+        bad = False
+        For j = 1 To n
+            If lblC(j) > 0 Then
+                For i = 1 To ch.SeriesCollection(j).Points.Count
+                    If ch.SeriesCollection(j).Points(i).HasDataLabel Then
+                        Set dl = ch.SeriesCollection(j).Points(i).DataLabel
+                        If dl.Top < pT Then bad = True
+                        If legCorner >= 0 And legCorner <= 3 Then
+                            If dl.Left < gR And dl.Left + dl.Width > gL And _
+                               dl.Top < gB And dl.Top + dl.Height > gT Then bad = True
+                        End If
+                    End If
+                    If bad Then Exit For
+                Next i
+            End If
+            If bad Then Exit For
+        Next j
+        If Not bad Then Exit For
+    Next iter
 End Sub
 
 ' A label sits on the bar's top by default, where the error bar's cap runs
@@ -373,6 +424,7 @@ Private Sub LiftBarLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
                     If ch.SeriesCollection(j).Points(i).HasDataLabel Then
                         yTop = pT + (1 - (CDbl(v) + Abs(CDbl(e)) - yLo) / (yHi - yLo)) * pH
                         With ch.SeriesCollection(j).Points(i).DataLabel
+                            .Position = xlLabelPositionOutsideEnd   ' back to the bar top first
                             If .Top + .Height > yTop - 1 Then .Top = yTop - .Height - 1
                         End With
                     End If

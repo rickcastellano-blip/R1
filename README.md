@@ -64,6 +64,8 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 
 - The legend goes in a corner where it covers no data (1 or 2 columns, raising the axes a
   step if needed), or outside the plot on the right when nothing fits.
+- Point labels are kept inside the plot and off the legend (axes widened a step at a time).
+- Both graphs: no fill behind the figure, white behind the axes.
 
 ## Bar Graph
 
