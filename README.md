@@ -80,7 +80,7 @@ just blue and red when there is only one pair), or darkening triplets (the same 
 third colour: light blue, light red, light gray, blue, red, gray, dark blue, dark red, black;
 just blue, red, gray for up to three series). Or pairs: each standard colour light then full (light
 blue, blue, light red, red, gray, black, ...). Or triplets: light, full, dark of each
-standard colour (light blue, blue, dark blue, light red, red, dark red, ...). The legend is
+standard colour (light blue, blue, dark blue, light red, red, dark red, light gray, gray, black, ...). The legend is
 placed like the Line Graph's: a clear corner (1 or 2 columns, raising the axis a step if
 needed), or outside the plot on the right.
 

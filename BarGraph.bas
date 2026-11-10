@@ -843,7 +843,8 @@ End Function
 '              ..., repeating after 26; light = halfway to white
 '   lighttriplets - ("triplets") the same with a dark one after each pair:
 '              light blue, blue, dark blue, light red, red, dark red, ...,
-'              repeating after 39; dark = 60 % of the colour
+'              repeating after 39; dark = 60 % of the colour. Black, which can't
+'              darken, is light gray, gray, black as in darkening triplets
 Private Function BarColors(scheme As String, n As Long) As Long()
     Dim c() As Long, pal As Variant, hues As Variant, i As Long, k As Long
     Dim hR As Long, hG As Long, hB As Long
@@ -886,6 +887,12 @@ Private Function BarColors(scheme As String, n As Long) As Long()
                 pal(i * k) = RGB((hR + 255) \ 2, (hG + 255) \ 2, (hB + 255) \ 2)
                 pal(i * k + 1) = hues(k)
                 If i = 3 Then pal(i * k + 2) = RGB(hR * 0.6, hG * 0.6, hB * 0.6)
+                If i = 3 And hues(k) = RGB(20, 20, 20) Then
+                    ' black can't darken: light gray, gray, black, as in darkening triplets
+                    pal(i * k) = RGB(163, 163, 163)
+                    pal(i * k + 1) = RGB(72, 72, 72)
+                    pal(i * k + 2) = RGB(20, 20, 20)
+                End If
             Next k
         End If
     End If
