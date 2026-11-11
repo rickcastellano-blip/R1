@@ -403,60 +403,10 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
 
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
-    FitBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC, legCorner, W, H
+    LiftBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC   ' just above the error bars
     ch.Refresh                               ' draw the final layout now
     nextTop = co.Top + co.Height + 12
     SaveFigure co                            ' PNG copy in FIG_DIR
-End Sub
-
-' Keeps every bar label inside the plot box and off the legend: while any
-' label pokes out of the top or touches the legend, the Y maximum goes up a
-' step (up to 6) and the labels are placed again.
-Private Sub FitBarLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow() As Long, _
-                         rc() As Long, ByVal valC As Long, ByVal errC As Long, lblC() As Long, _
-                         ByVal legCorner As Long, ByVal W As Double, ByVal H As Double)
-    Dim iter As Long, j As Long, i As Long, bad As Boolean, hasLbl As Boolean
-    Dim pT As Double, gL As Double, gT As Double, gR As Double, gB As Double
-    Dim dl As DataLabel
-    For j = 1 To n
-        If lblC(j) > 0 Then hasLbl = True
-    Next j
-    If Not hasLbl Then Exit Sub
-    On Error Resume Next
-    For iter = 0 To 6
-        If iter > 0 Then
-            With ch.Axes(xlValue)
-                .MaximumScale = .MaximumScale + .MajorUnit
-            End With
-            AnchorLegend ch, legCorner, W, H
-        End If
-        LiftBarLabels ch, tws, n, blkRow, rc, valC, errC, lblC
-        ch.Refresh
-        DoEvents
-        pT = ch.PlotArea.InsideTop
-        If legCorner >= 0 And legCorner <= 3 Then
-            gL = ch.Legend.Left: gT = ch.Legend.Top
-            gR = gL + ch.Legend.Width: gB = gT + ch.Legend.Height
-        End If
-        bad = False
-        For j = 1 To n
-            If lblC(j) > 0 Then
-                For i = 1 To ch.SeriesCollection(j).Points.Count
-                    If ch.SeriesCollection(j).Points(i).HasDataLabel Then
-                        Set dl = ch.SeriesCollection(j).Points(i).DataLabel
-                        If dl.Top < pT Then bad = True
-                        If legCorner >= 0 And legCorner <= 3 Then
-                            If dl.Left < gR And dl.Left + dl.Width > gL And _
-                               dl.Top < gB And dl.Top + dl.Height > gT Then bad = True
-                        End If
-                    End If
-                    If bad Then Exit For
-                Next i
-            End If
-            If bad Then Exit For
-        Next j
-        If Not bad Then Exit For
-    Next iter
 End Sub
 
 ' A label sits on the bar's top by default, where the error bar's cap runs
@@ -797,6 +747,24 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
         If gapH < 4 Or gapH > 40 Then gapH = 12
     End If
     kMax = n: If kMax > 2 Then kMax = 2
+
+    ' room for the labels first: while a label (estimated size, above its
+    ' error bar) would poke out of the top of the plot, raise the Y maximum a
+    ' step (up to 6). This becomes the axis the legend is fitted to.
+    For iter = 1 To 6
+        yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
+        If yHi <= yLo Then Exit For
+        hits = 0
+        For i = 1 To nB
+            If bL(i) > 0 Then
+                If pT + (1 - (by1(i) - yLo) / (yHi - yLo)) * pH - bL(i) < pT Then hits = hits + 1
+            End If
+        Next i
+        If hits = 0 Then Exit For
+        With ch.Axes(xlValue)
+            .MaximumScale = yHi + .MajorUnit
+        End With
+    Next iter
     yHi0 = ch.Axes(xlValue).MaximumScale
 
     For iter = 0 To 3
