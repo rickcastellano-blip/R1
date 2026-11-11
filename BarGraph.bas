@@ -87,6 +87,7 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     Dim wAX As Double, axMax As Double, axStep As Double
     Dim maxLen As Long, rot As Long, paH As Double
     Dim legCorner As Long, legExtraW As Double, legExtraH As Double, vertLbl As Boolean, lblFs As Double
+    Dim useHdr As Boolean, hE As Long, hX As Long, hN As Long
 
     '--- 2. orient on the tags ---------------------------------------------
     tagR = f.Row: tagC = f.Column
@@ -124,6 +125,14 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     End If
     If lastR < tagR + 2 Then MsgBox "No data rows found below the tag in " & _
                                     f.Address(False, False) & ".", vbExclamation: Exit Sub
+
+    ' "errorbar" / "note" headers right of the values pick those columns
+    ' ("errorbarx" means nothing for bars). With no errorbar column, errC
+    ' points at the sheet's last column, which is always empty.
+    useHdr = HeaderCols(tws, tagR + 1, valC + 1, lastR, hE, hX, hN)
+    If useHdr Then
+        If hE > 0 Then errC = hE Else errC = tws.Columns.Count
+    End If
 
     '--- 3. blocks = SERIES (xgrapher: bars(:,plotnum) = one block) ---------
     ReDim blkRow(1 To lastR - tagR + 2)
@@ -209,7 +218,11 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     ' right is never taken as labels.
     ReDim lblC(1 To nBlk)
     For j = 1 To nBlk
-        If ColHasText(tws, blkRow(j), rc(j), errC) Then
+        If useHdr Then
+            If hN > 0 Then
+                If Not ColIsBlank(tws, blkRow(j), rc(j), hN) Then lblC(j) = hN
+            End If
+        ElseIf ColHasText(tws, blkRow(j), rc(j), errC) Then
             lblC(j) = errC
         ElseIf ColIsBlank(tws, blkRow(j), rc(j), errC) Then
             lblC(j) = 0
@@ -239,7 +252,7 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
             .Format.Line.Visible = msoTrue
             .Format.Line.ForeColor.RGB = RGB(0, 0, 0)
             .Format.Line.Weight = wAX
-            If lblC(j) <> errC Then
+            If lblC(j) <> errC And errC < tws.Columns.Count Then
                 .ErrorBar Direction:=xlY, Include:=xlBoth, _
                           Type:=xlErrorBarTypeCustom, Amount:=eRng, MinusValues:=eRng
                 With .ErrorBars
@@ -621,6 +634,30 @@ Private Sub SaveFigure(co As ChartObject)
     If Not prevSel Is Nothing Then prevSel.Select
     On Error GoTo 0
 End Sub
+
+' Column-header tags in the row below the graph tag, from column c0 to the
+' right (stopping at a column that is empty from the header row to r1):
+' "errorbar" = +/- Y errors, "errorbarx" = +/- X errors, "note" = point
+' labels. True if any is found; then those columns are used and nothing
+' right of the values is guessed.
+Private Function HeaderCols(ws As Worksheet, ByVal hdrR As Long, ByVal c0 As Long, _
+                            ByVal r1 As Long, ByRef hE As Long, ByRef hX As Long, _
+                            ByRef hN As Long) As Boolean
+    Dim c As Long, t As String
+    hE = 0: hX = 0: hN = 0
+    For c = c0 To c0 + 29
+        t = LCase$(CellText(ws.Cells(hdrR, c).Value))
+        If Len(t) = 0 Then
+            If Application.CountA(ws.Range(ws.Cells(hdrR, c), ws.Cells(r1, c))) = 0 Then Exit For
+        End If
+        Select Case t
+            Case "errorbar":  If hE = 0 Then hE = c
+            Case "errorbarx": If hX = 0 Then hX = c
+            Case "note":      If hN = 0 Then hN = c
+        End Select
+    Next c
+    HeaderCols = (hE + hX + hN > 0)
+End Function
 
 ' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
 ' Excel never has to round it differently from one chart to the next.

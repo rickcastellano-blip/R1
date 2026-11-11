@@ -45,6 +45,9 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   of X, on the series' first row. Axis titles are the row below the tag (linked to the cells).
 - A row where X **and** Y are both blank starts a new series; two such rows end the graph.
   A row with one value or `#N/A` stays in the series with no point.
+- Column-header tags (in the row below the tag, right of Y): `errorbar` = ±Y errors,
+  `errorbarx` = ±X errors, `note` = point labels. If any is present only those columns are
+  used; otherwise the columns right of Y are read as below.
 - Columns right of Y: numeric ±Y, then ±X error bars (drawn in the series colour), and
   point labels in the first text column. Only columns up to the first column that is
   blank over all the graph's data rows are used, so a table beyond a blank column is
@@ -78,7 +81,8 @@ series (legend entry); each row within a block is a group on the x axis. A blank
 block; `#N/A` stays in it as a group with no bar. The series name is in the column left of
 the tag, on the block's first row. The column right of the values holds ± errors; bar labels
 (data tags) are text in that column (then no error bars), or whatever is in the next
-column (text or numbers, shown as displayed), drawn above the error bars. **Buttons!H3** sets their direction: `horiz` (default) or `vert`; **Buttons!I3** their font size in points (blank = 10). **Buttons!J3** sets the figure width in inches (blank = 5); only the
+column (text or numbers, shown as displayed), drawn above the error bars. Header tags `errorbar` and `note` in the row below the tag
+(right of the values) pick those columns instead, as in the Line Graph. **Buttons!H3** sets their direction: `horiz` (default) or `vert`; **Buttons!I3** their font size in points (blank = 10). **Buttons!J3** sets the figure width in inches (blank = 5); only the
 plot widens (height, text, lines and the left/right margins stay fixed). An empty column stops the search. The colour scheme is
 **Buttons!G3**: standard (the xgrapher.m colour list, as in the Line Graph), or darkening
 pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red;

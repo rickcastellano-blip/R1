@@ -110,7 +110,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
     Dim lblPos As Long, lblFs As Double
 
-    Dim nBlank As Long
+    Dim nBlank As Long, useHdr As Boolean, hE As Long, hX As Long, hN As Long
 
     tagR = f.Row: tagC = f.Column
     tag = LCase$(Trim$(CStr(f.Value)))
@@ -206,6 +206,24 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
             lblC(j) = e2C + 1
         End If
     Next j
+
+    ' "errorbar" / "errorbarx" / "note" headers right of Y override all of the
+    ' above: only the tagged columns are used
+    If HeaderCols(tws, tagR + 1, yC + 1, endR, hE, hX, hN) Then
+        hasE1 = False: hasE2 = False
+        If hE > 0 Then
+            e1C = hE: hasE1 = ColHasNum(tws, blkRow(1), endR - blkRow(1) + 1, e1C)
+        End If
+        If hX > 0 Then
+            e2C = hX: hasE2 = ColHasNum(tws, blkRow(1), endR - blkRow(1) + 1, e2C)
+        End If
+        For j = 1 To nBlk
+            lblC(j) = 0
+            If hN > 0 Then
+                If Not ColIsBlank(tws, blkRow(j), rc(j), hN) Then lblC(j) = hN
+            End If
+        Next j
+    End If
 
     '--- 4. size + scaled type / line weights ------------------------------
     ' Only the width follows the Width cell: the height, type, line weights and
@@ -501,6 +519,14 @@ Private Function ColIsBlank(ws As Worksheet, r0 As Long, n As Long, c As Long) A
     ColIsBlank = (Application.CountA(ws.Cells(r0, c).Resize(n, 1)) = 0)
 End Function
 
+' True if any cell in column c, rows r0..r0+n-1, holds a number.
+Private Function ColHasNum(ws As Worksheet, r0 As Long, n As Long, c As Long) As Boolean
+    Dim i As Long
+    For i = 0 To n - 1
+        If IsNum(ws.Cells(r0 + i, c).Value) Then ColHasNum = True: Exit Function
+    Next i
+End Function
+
 ' True if any cell in column c, rows r0..r0+n-1, holds non-blank text.
 Private Function ColHasText(ws As Worksheet, r0 As Long, n As Long, c As Long) As Boolean
     Dim i As Long, v As Variant
@@ -655,6 +681,30 @@ Private Sub SaveFigure(co As ChartObject)
     If Not prevSel Is Nothing Then prevSel.Select
     On Error GoTo 0
 End Sub
+
+' Column-header tags in the row below the graph tag, from column c0 to the
+' right (stopping at a column that is empty from the header row to r1):
+' "errorbar" = +/- Y errors, "errorbarx" = +/- X errors, "note" = point
+' labels. True if any is found; then those columns are used and nothing
+' right of the values is guessed.
+Private Function HeaderCols(ws As Worksheet, ByVal hdrR As Long, ByVal c0 As Long, _
+                            ByVal r1 As Long, ByRef hE As Long, ByRef hX As Long, _
+                            ByRef hN As Long) As Boolean
+    Dim c As Long, t As String
+    hE = 0: hX = 0: hN = 0
+    For c = c0 To c0 + 29
+        t = LCase$(CellText(ws.Cells(hdrR, c).Value))
+        If Len(t) = 0 Then
+            If Application.CountA(ws.Range(ws.Cells(hdrR, c), ws.Cells(r1, c))) = 0 Then Exit For
+        End If
+        Select Case t
+            Case "errorbar":  If hE = 0 Then hE = c
+            Case "errorbarx": If hX = 0 Then hX = c
+            Case "note":      If hN = 0 Then hN = c
+        End Select
+    Next c
+    HeaderCols = (hE + hX + hN > 0)
+End Function
 
 ' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
 ' Excel never has to round it differently from one chart to the next.
