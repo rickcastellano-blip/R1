@@ -72,7 +72,8 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 
 ## Bar Graph
 
-Select a block with a `bargraph` tag (and optionally `xlabels`). Each block of values is a
+Select a block with one or more `bargraph` tags (each optionally with an `xlabels` tag below it,
+in the same column); each tag makes its own chart, stacked down the right of the selection. Each block of values is a
 series (legend entry); each row within a block is a group on the x axis. A blank cell ends a
 block; `#N/A` stays in it as a group with no bar. The series name is in the column left of
 the tag, on the block's first row. The column right of the values holds ± errors; bar labels

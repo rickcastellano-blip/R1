@@ -31,8 +31,48 @@ Private Const LABEL_FS      As Double = 10       ' default bar-label font size (
 ' =========================================================
 
 Sub GenerateStrengthBarGraph()
-    Dim src As Range, tws As Worksheet, scope As Range, ur As Range, f As Range
-    Dim tagR As Long, tagC As Long, xlR As Long, xlC As Long
+    Dim src As Range, tws As Worksheet, scope As Range, ur As Range
+    Dim cel As Range, tags As Collection, i As Long, nextTop As Double
+
+    '--- pick the range (you can switch workbooks in this dialog) ----------
+    On Error Resume Next
+    Set src = Application.InputBox( _
+        Prompt:="Switch to the workbook you want, then select/drag the data block." & vbCrLf & _
+                "Every 'bargraph' tag in the selection makes its own chart.", _
+        Title:="Generate Bar Graph", Type:=8)
+    On Error GoTo 0
+    If src Is Nothing Then Exit Sub
+
+    Set tws = src.Worksheet
+    Set ur = tws.UsedRange
+    Set scope = Application.Intersect(src, ur)
+    If scope Is Nothing Then MsgBox "That selection contains no data.", vbExclamation: Exit Sub
+
+    ' every bargraph tag, in reading order (rows, then columns)
+    Set tags = New Collection
+    For Each cel In scope.Cells
+        If LCase$(CellText(cel.Value)) = "bargraph" Then tags.Add cel
+    Next cel
+    If tags.Count = 0 Then
+        MsgBox "Could not find a cell containing 'bargraph' inside the selection.", vbExclamation
+        Exit Sub
+    End If
+
+    ' charts are stacked down the right of the selection, each no higher
+    ' than its tag and never overlapping the one before
+    For i = 1 To tags.Count
+        BuildBarGraph src, tws, scope, ur, tags(i), i, nextTop
+    Next i
+    src.Select
+End Sub
+
+' One chart for the bargraph tag in f. Its xlabels tag is the first one below
+' f in the same column (else anywhere in the selection below f) and before the
+' next bargraph tag in that column; without one, the data ends at that next
+' tag or the end of the selection.
+Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As Range, _
+                          ByVal f As Range, ByVal gIdx As Long, ByRef nextTop As Double)
+    Dim tagR As Long, tagC As Long, xlR As Long, xlC As Long, stopR As Long, cel As Range
     Dim labC As Long, valC As Long, errC As Long, nameC As Long
     Dim r As Long, i As Long, j As Long, lastR As Long, p As Long
     Dim blkRow() As Long, blkLab() As String, rc() As Long, lblC() As Long
@@ -48,33 +88,29 @@ Sub GenerateStrengthBarGraph()
     Dim maxLen As Long, rot As Long, paH As Double
     Dim legCorner As Long, legExtraW As Double, legExtraH As Double, vertLbl As Boolean, lblFs As Double
 
-    '--- 1. pick the range (you can switch workbooks in this dialog) --------
-    On Error Resume Next
-    Set src = Application.InputBox( _
-        Prompt:="Switch to the workbook you want, then select/drag the data block." & vbCrLf & _
-                "The selection must include the 'bargraph' tag cell.", _
-        Title:="Generate Bar Graph", Type:=8)
-    On Error GoTo 0
-    If src Is Nothing Then Exit Sub
-
-    Set tws = src.Worksheet
-    Set ur = tws.UsedRange
-    Set scope = Application.Intersect(src, ur)
-    If scope Is Nothing Then MsgBox "That selection contains no data.", vbExclamation: Exit Sub
-
     '--- 2. orient on the tags ---------------------------------------------
-    Set f = scope.Find(What:="bargraph", LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
-    If f Is Nothing Then
-        MsgBox "Could not find a cell containing 'bargraph' inside the selection.", vbExclamation
-        Exit Sub
-    End If
     tagR = f.Row: tagC = f.Column
-
-    Set f = scope.Find(What:="xlabels", LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
-    If Not f Is Nothing Then xlR = f.Row: xlC = f.Column
+    stopR = scope.Row + scope.Rows.Count            ' next bargraph tag in this column
+    For Each cel In Application.Intersect(scope, tws.Columns(tagC)).Cells
+        If cel.Row > tagR And cel.Row < stopR Then
+            If LCase$(CellText(cel.Value)) = "bargraph" Then stopR = cel.Row
+        End If
+    Next cel
+    For Each cel In scope.Cells                     ' its xlabels tag
+        If cel.Row > tagR And cel.Row < stopR Then
+            If LCase$(CellText(cel.Value)) = "xlabels" Then
+                If cel.Column = tagC Then           ' same column wins, then the nearest
+                    If xlC <> tagC Or cel.Row < xlR Then xlR = cel.Row: xlC = cel.Column
+                ElseIf xlC <> tagC Then
+                    If xlR = 0 Or cel.Row < xlR Then xlR = cel.Row: xlC = cel.Column
+                End If
+            End If
+        End If
+    Next cel
 
     valC = tagC: errC = tagC + 1: labC = tagC - 1
-    If labC < 1 Then MsgBox "The 'bargraph' tag needs a label column to its left.", vbExclamation: Exit Sub
+    If labC < 1 Then MsgBox "The 'bargraph' tag in " & f.Address(False, False) & _
+                            " needs a label column to its left.", vbExclamation: Exit Sub
     If xlC > 1 Then nameC = xlC - 1 Else nameC = labC
 
     b = tws.Cells(tagR + 1, valC).Value
@@ -84,9 +120,10 @@ Sub GenerateStrengthBarGraph()
     If xlR > 0 Then
         lastR = xlR - 1
     Else
-        lastR = Application.Min(scope.Row + scope.Rows.Count - 1, ur.Row + ur.Rows.Count - 1)
+        lastR = Application.Min(stopR - 1, ur.Row + ur.Rows.Count - 1)
     End If
-    If lastR < tagR + 2 Then MsgBox "No data rows found below the tag.", vbExclamation: Exit Sub
+    If lastR < tagR + 2 Then MsgBox "No data rows found below the tag in " & _
+                                    f.Address(False, False) & ".", vbExclamation: Exit Sub
 
     '--- 3. blocks = SERIES (xgrapher: bars(:,plotnum) = one block) ---------
     ReDim blkRow(1 To lastR - tagR + 2)
@@ -119,7 +156,8 @@ Sub GenerateStrengthBarGraph()
         End If
     Next r
     If Not gotNum Then nBlk = 0
-    If nBlk = 0 Then MsgBox "No numeric data found below the tag.", vbExclamation: Exit Sub
+    If nBlk = 0 Then MsgBox "No numeric data found below the tag in " & _
+                            f.Address(False, False) & ".", vbExclamation: Exit Sub
     For j = 1 To nBlk
         If rc(j) > nRow Then nRow = rc(j)
     Next j
@@ -156,8 +194,8 @@ Sub GenerateStrengthBarGraph()
     '--- 6. new chart (nothing existing is deleted) ------------------------
     Set co = tws.ChartObjects.Add( _
         Left:=tws.Cells(scope.Row, scope.Column + scope.Columns.Count).Left + 12, _
-        Top:=tws.Cells(scope.Row, 1).Top, Width:=W, Height:=H)
-    co.Name = "BarGraph_" & Format$(Now, "yyyymmdd_hhmmss")
+        Top:=Application.Max(tws.Cells(tagR, 1).Top, nextTop), Width:=W, Height:=H)
+    co.Name = "BarGraph_" & Format$(Now, "yyyymmdd_hhmmss") & "_" & gIdx
     co.Placement = xlFreeFloating
     Set ch = co.Chart
     ch.ChartType = xlColumnClustered
@@ -354,6 +392,7 @@ Sub GenerateStrengthBarGraph()
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
     FitBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC, legCorner, W, H
     ch.Refresh                               ' draw the final layout now
+    nextTop = co.Top + co.Height + 12
     SaveFigure co                            ' PNG copy in FIG_DIR
 End Sub
 
