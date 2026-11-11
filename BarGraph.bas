@@ -845,8 +845,9 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
         ch.Legend.Width = bW
         ch.Legend.Left = bX
     Next wq
-    ' then pull it in 4 % at a time while no name wraps, for a snug box
-    For wq = 1 To 10
+    ' then pull a one-column legend in 4 % at a time while no name wraps, for
+    ' a snug box (a 2-column one would reflow into one column instead)
+    For wq = 1 To IIf(bK = 1, 10, 0)
         ch.Legend.Width = bW * 0.96
         If bC Mod 2 = 0 Then ch.Legend.Left = pL + pW - insX - bW * 0.96
         ch.Refresh
