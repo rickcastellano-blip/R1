@@ -845,6 +845,28 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
         ch.Legend.Width = bW
         ch.Legend.Left = bX
     Next wq
+    ' then pull it in 4 % at a time while no name wraps, for a snug box
+    For wq = 1 To 10
+        ch.Legend.Width = bW * 0.96
+        If bC Mod 2 = 0 Then ch.Legend.Left = pL + pW - insX - bW * 0.96
+        ch.Refresh
+        DoEvents
+        hLo = 0: hHi = 0
+        On Error Resume Next
+        For i = 1 To ch.Legend.LegendEntries.Count
+            hOne = ch.Legend.LegendEntries(i).Height
+            If hLo = 0 Or hOne < hLo Then hLo = hOne
+            If hOne > hHi Then hHi = hOne
+        Next i
+        On Error GoTo Done
+        If hLo <= 0 Or hHi >= hLo * 1.5 Or Abs(ch.Legend.Width - bW * 0.96) > 1 Then
+            ch.Legend.Width = bW                 ' that wrapped (or Excel refused): back
+            ch.Legend.Left = bX
+            Exit For
+        End If
+        bW = bW * 0.96
+        If bC Mod 2 = 0 Then bX = pL + pW - insX - bW
+    Next wq
     legCorner = bC
     Exit Sub
 
