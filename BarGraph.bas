@@ -16,6 +16,7 @@ Private Const PA_HEIGHT     As Double = 0.75
 Private Const LG_RIGHT      As Double = 0.938    ' 'northeast'
 Private Const LG_TOP        As Double = 0.086
 Private Const LG_LINESP     As Double = 1.45
+Private Const LG_GAP_ABOVE  As Double = 6        ' gap between a legend above the plot and the plot (pt)
 Private Const TICK_OFFSET   As Long = 20
 Private Const GAP_GROUPED   As Long = 150
 ' colour scheme cell on the Buttons sheet of this workbook: standard / darkening pairs
@@ -26,6 +27,7 @@ Private Const FIG_SCALE     As Double = 4    ' PNG drawn this many times the cha
 Private Const SCHEME_CELL    As String = "G3"
 Private Const LABELDIR_CELL  As String = "H3"   ' bar labels: horiz or vert
 Private Const LABELFS_CELL   As String = "I3"   ' bar-label font size (pt); blank = LABEL_FS
+Private Const LEGOVER_CELL   As String = "K3"   ' legend that fits no corner: above or right (default)
 Private Const GAP_SINGLE    As Long = 80
 Private Const LABEL_FS      As Double = 10       ' default bar-label font size (pt, not scaled)
 ' =========================================================
@@ -87,7 +89,7 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     Dim wAX As Double, axMax As Double, axStep As Double
     Dim maxLen As Long, rot As Long, paH As Double
     Dim legCorner As Long, legExtraW As Double, legExtraH As Double, vertLbl As Boolean, lblFs As Double
-    Dim useHdr As Boolean, hE As Long, hX As Long, hN As Long
+    Dim useHdr As Boolean, hE As Long, hX As Long, hN As Long, topShift As Double
 
     '--- 2. orient on the tags ---------------------------------------------
     tagR = f.Row: tagC = f.Column
@@ -382,13 +384,15 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     ' pick the corner / column count that covers no bar, raising the axis
     ' maximum if no corner is clear, or put the legend outside the plot
     PlaceBarLegend ch, tws, W, H, nBlk, nRow, ch.ChartGroups(1).GapWidth, fsL * LG_LINESP, _
-                   blkRow, rc, valC, errC, lblC, vertLbl, lblFs, legCorner, legExtraW, legExtraH
+                   blkRow, rc, valC, errC, lblC, vertLbl, lblFs, ReadLegendAbove(), _
+                   legCorner, legExtraW, legExtraH
+    If legCorner = 5 Then topShift = Px(legExtraH)    ' legend above: plot moves down
 
     On Error Resume Next
     For p = 1 To 2
         With ch.PlotArea
             .InsideLeft = Px(PA_LEFT * BaseW())
-            .InsideTop = Px(PA_TOP * H)
+            .InsideTop = Px(PA_TOP * H) + topShift
             .InsideWidth = Px(W - (1 - PA_WIDTH) * BaseW())
             .InsideHeight = Px(paH * H)
         End With
@@ -402,7 +406,7 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     On Error GoTo 0
 
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
-    AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
+    AnchorLegend ch, legCorner, W, H, topShift   ' last, once nothing else will move
     LiftBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC   ' just above the error bars
     ch.Refresh                               ' draw the final layout now
     nextTop = co.Top + co.Height + 12
@@ -650,7 +654,8 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                            ByVal n As Long, ByVal nCat As Long, ByVal gapPct As Double, _
                            ByVal lineH As Double, blkRow() As Long, rc() As Long, _
                            ByVal valC As Long, ByVal errC As Long, lblC() As Long, _
-                           ByVal vertLbl As Boolean, ByVal lblFs As Double, ByRef legCorner As Long, ByRef extraW As Double, ByRef extraH As Double)
+                           ByVal vertLbl As Boolean, ByVal lblFs As Double, ByVal legAbove As Boolean, _
+                           ByRef legCorner As Long, ByRef extraW As Double, ByRef extraH As Double)
     Dim bx0() As Double, bx1() As Double, by0() As Double, by1() As Double, nB As Long
     Dim bL() As Double, t As Variant
     Dim j As Long, cIdx As Long, v As Variant, e As Variant, barW As Double, barTop As Double
@@ -813,12 +818,42 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     Exit Sub
 
 Outside:
+    Dim fs As Double, maxLen As Long, nm As String
+    Dim wrapTry As Long, hMinE As Double, hMaxE As Double, hEnt As Double, perRow As Long
+    ch.Axes(xlValue).MaximumScale = yHi0
+
+    If legAbove Then
+        ' legend above the plot (Buttons!K3 = above): entries in rows as wide
+        ' as the plot, the chart made taller by the legend's height and the
+        ' plot moved down by the same amount; nothing else changes
+        perRow = Int((pW - padW - 4 + gapH) / (eWh + gapH))
+        If perRow < 1 Then perRow = 1
+        If perRow > n Then perRow = n
+        rws = -Int(-n / perRow)
+        lw = perRow * eWh + (perRow - 1) * gapH + padW + 4
+        lh = rws * eH + padH + 1
+        extraH = LG_GAP_ABOVE + lh + LG_GAP_ABOVE
+        ch.Parent.Height = H + Px(extraH)
+        For j = 1 To 2
+            With ch.PlotArea
+                .InsideLeft = pL: .InsideTop = pT + Px(extraH): .InsideWidth = pW: .InsideHeight = pH
+            End With
+        Next j
+        With ch.Legend
+            .Position = xlLegendPositionTop
+            .IncludeInLayout = False
+            .Width = lw
+            .Height = lh
+            .Left = pL + (pW - lw) / 2
+            .Top = pT + Px(extraH) - lh - LG_GAP_ABOVE
+        End With
+        legCorner = 5
+        Exit Sub
+    End If
+
     ' legend outside the plot on the right, chart widened (and made taller if
     ' needed) first, sized from the longest series name and widened until no
     ' name wraps
-    Dim fs As Double, maxLen As Long, nm As String
-    Dim wrapTry As Long, hMinE As Double, hMaxE As Double, hEnt As Double
-    ch.Axes(xlValue).MaximumScale = yHi0
     fs = lineH / LG_LINESP
     For j = 1 To ch.SeriesCollection.Count
         nm = ch.SeriesCollection(j).Name
@@ -895,7 +930,8 @@ End Function
 ' Align the legend to its corner of the plot box as finally drawn (or beside
 ' it for corner 4), using the size Excel actually gave it.
 ' corner: 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left, 4 outside right.
-Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, ByVal H As Double)
+Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, ByVal H As Double, _
+                         Optional ByVal topShift As Double = 0)
     Dim insX As Double, insY As Double, p As Long
     On Error Resume Next
     ch.Refresh
@@ -907,16 +943,22 @@ Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, B
     For p = 1 To 4
         With ch.PlotArea
             .InsideLeft = Px(PA_LEFT * BaseW())
-            .InsideTop = Px(PA_TOP * H)
+            .InsideTop = Px(PA_TOP * H) + topShift
             .InsideWidth = Px(W - (1 - PA_WIDTH) * BaseW())
             .InsideHeight = Px(PA_HEIGHT * H)
         End With
         If Abs(ch.PlotArea.InsideLeft - Px(PA_LEFT * BaseW())) < 0.4 And _
-           Abs(ch.PlotArea.InsideTop - Px(PA_TOP * H)) < 0.4 And _
+           Abs(ch.PlotArea.InsideTop - Px(PA_TOP * H) - topShift) < 0.4 And _
            Abs(ch.PlotArea.InsideWidth - Px(W - (1 - PA_WIDTH) * BaseW())) < 0.4 And _
            Abs(ch.PlotArea.InsideHeight - Px(PA_HEIGHT * H)) < 0.4 Then Exit For
     Next p
     With ch.Legend
+        If corner = 5 Then                       ' above the plot, centred on it
+            .Left = ch.PlotArea.InsideLeft + (ch.PlotArea.InsideWidth - .Width) / 2
+            .Top = ch.PlotArea.InsideTop - .Height - LG_GAP_ABOVE
+            ch.Refresh
+            Exit Sub
+        End If
         If corner = 4 Then
             .Left = ch.PlotArea.InsideLeft + ch.PlotArea.InsideWidth + 18
             .Top = ch.PlotArea.InsideTop
@@ -963,6 +1005,17 @@ Private Function ReadLabelSize() As Double
     If IsNum(v) Then
         If CDbl(v) > 0 Then ReadLabelSize = Application.Min(72, Application.Max(4, CDbl(v)))
     End If
+End Function
+
+' Legend overflow from Buttons!K3: "above" puts a legend that fits no corner
+' above the plot; anything else (right, blank) puts it to the right.
+Private Function ReadLegendAbove() As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    ReadLegendAbove = (LCase$(CellText(ws.Range(LEGOVER_CELL).Value)) = "above")
 End Function
 
 Private Function ReadScheme() As String

@@ -82,7 +82,8 @@ block; `#N/A` stays in it as a group with no bar. The series name is in the colu
 the tag, on the block's first row. The column right of the values holds ± errors; bar labels
 (data tags) are text in that column (then no error bars), or whatever is in the next
 column (text or numbers, shown as displayed), drawn above the error bars. Header tags `errorbar` and `note` in the row below the tag
-(right of the values) pick those columns instead, as in the Line Graph. **Buttons!H3** sets their direction: `horiz` (default) or `vert`; **Buttons!I3** their font size in points (blank = 10). **Buttons!J3** sets the figure width in inches (blank = 5); only the
+(right of the values) pick those columns instead, as in the Line Graph. **Buttons!H3** sets their direction: `horiz` (default) or `vert`; **Buttons!I3** their font size in points (blank = 10). **Buttons!K3** says where a legend that fits no corner goes: `right` (default; the chart
+widens) or `above` (the chart grows taller and the plot moves down). **Buttons!J3** sets the figure width in inches (blank = 5); only the
 plot widens (height, text, lines and the left/right margins stay fixed). An empty column stops the search. The colour scheme is
 **Buttons!G3**: standard (the xgrapher.m colour list, as in the Line Graph), or darkening
 pairs (light blue, light red, blue, red, dark blue, dark red, from the standard blue and red;
