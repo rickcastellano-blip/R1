@@ -730,6 +730,16 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     If padH > 8 Then padH = 8
     If padH < 4 Then padH = 4
 
+    ' Excel may already have wrapped a long name when it was measured: an entry
+    ' is never sized narrower than its longest name on one line
+    Dim estE As Double, nmLen As Long, wq As Long, hLo As Double, hHi As Double, hOne As Double
+    For i = 1 To n
+        nmLen = Len(ch.SeriesCollection(i).Name)
+        If (lineH / LG_LINESP) * (1.6 + 0.52 * nmLen) > estE Then _
+            estE = (lineH / LG_LINESP) * (1.6 + 0.52 * nmLen)
+    Next i
+    If eW < estE Then eW = estE
+
     ' horizontal layout (used for 2 columns) spaces entries differently
     eWh = eW: gapH = 12
     If n >= 2 Then
@@ -749,6 +759,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
         ch.Legend.IncludeInLayout = False
         On Error GoTo Done
         If eWh <= 0 Then eWh = eW
+        If eWh < estE Then eWh = estE
         If gapH < 4 Or gapH > 40 Then gapH = 12
     End If
     kMax = n: If kMax > 2 Then kMax = 2
@@ -814,6 +825,24 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
         .Left = bX
         .Top = bY
     End With
+    ' still wrapping (entries of uneven height): widen it, keeping its corner
+    For wq = 1 To 4
+        ch.Refresh
+        DoEvents
+        hLo = 0: hHi = 0
+        On Error Resume Next
+        For i = 1 To ch.Legend.LegendEntries.Count
+            hOne = ch.Legend.LegendEntries(i).Height
+            If hLo = 0 Or hOne < hLo Then hLo = hOne
+            If hOne > hHi Then hHi = hOne
+        Next i
+        On Error GoTo Done
+        If hLo <= 0 Or hHi < hLo * 1.5 Then Exit For
+        bW = bW * 1.15
+        If bC Mod 2 = 0 Then bX = pL + pW - insX - bW
+        ch.Legend.Width = bW
+        ch.Legend.Left = bX
+    Next wq
     legCorner = bC
     Exit Sub
 
