@@ -17,6 +17,7 @@ Private Const LG_RIGHT      As Double = 0.938    ' 'northeast'
 Private Const LG_TOP        As Double = 0.086
 Private Const LG_LINESP     As Double = 1.45
 Private Const LG_GAP_ABOVE  As Double = 6        ' gap between a legend above the plot and the plot (pt)
+Private Const LG_MAX_GROW   As Double = 2        ' the Y axis may grow to this many times its height to fit the legend inside
 Private Const TICK_OFFSET   As Long = 20
 Private Const GAP_GROUPED   As Long = 150
 ' colour scheme cell on the Buttons sheet of this workbook: standard / darkening pairs
@@ -646,7 +647,7 @@ End Sub
 ' Tries every corner (top-right, top-left, bottom-right, bottom-left) with 1
 ' or 2 legend columns and keeps the one that covers no bar (error bars
 ' included), preferring top-right and one column. If none is clear it raises
-' the Y maximum one major step at a time (up to 3) and takes the first level
+' the Y maximum one major step at a time (up to LG_MAX_GROW x its height) and takes the first level
 ' where any layout is clear. If no level clears a corner, or the legend is too
 ' big for the plot, the axis is put back and the legend goes outside the plot
 ' on the right, with the chart widened to fit it.
@@ -783,7 +784,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     Next iter
     yHi0 = ch.Axes(xlValue).MaximumScale
 
-    For iter = 0 To 3
+    For iter = 0 To 40
         yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
         bSc = 2147483647
         For k = 1 To kMax
@@ -805,11 +806,12 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
         Next k
         If bSc = 2147483647 Then GoTo Outside    ' legend too big for any layout
         If bHits = 0 Then Exit For
-        If iter < 3 Then                          ' room at the top
-            With ch.Axes(xlValue)
-                .MaximumScale = yHi + .MajorUnit
-            End With
-        End If
+        ' room at the top, a step at a time, while the axis stays within
+        ' LG_MAX_GROW times the height it started at
+        With ch.Axes(xlValue)
+            If yHi + .MajorUnit > yLo + LG_MAX_GROW * (yHi0 - yLo) + .MajorUnit / 1000 Then Exit For
+            .MaximumScale = yHi + .MajorUnit
+        End With
     Next iter
     If bHits > 0 Then GoTo Outside              ' no corner is clear at any level
 
