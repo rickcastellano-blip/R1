@@ -28,6 +28,7 @@ Private Const FIG_SCALE     As Double = 4    ' PNG drawn this many times the cha
 Private Const SCHEME_CELL    As String = "G3"
 Private Const LABELDIR_CELL  As String = "H3"   ' bar labels: horiz or vert
 Private Const LABELFS_CELL   As String = "I3"   ' bar-label font size (pt); blank = LABEL_FS
+Private Const LEGOFF_CELL    As String = "L3"   ' "off" = no legend
 Private Const LEGOVER_CELL   As String = "K3"   ' legend that fits no corner: above or right (default)
 Private Const GAP_SINGLE    As Long = 80
 Private Const LABEL_FS      As Double = 10       ' default bar-label font size (pt, not scaled)
@@ -387,6 +388,7 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     PlaceBarLegend ch, tws, W, H, nBlk, nRow, ch.ChartGroups(1).GapWidth, fsL * LG_LINESP, _
                    blkRow, rc, valC, errC, lblC, vertLbl, lblFs, ReadLegendAbove(), _
                    legCorner, legExtraW, legExtraH
+    If legCorner = -1 Then ch.HasLegend = False         ' Buttons!L3 = off
     If legCorner = 5 Then topShift = Px(legExtraH)    ' legend above: plot moves down
 
     On Error Resume Next
@@ -783,6 +785,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
         End With
     Next iter
     yHi0 = ch.Axes(xlValue).MaximumScale
+    If ReadLegendOff() Then legCorner = -1: Exit Sub    ' no legend: only the label room
 
     For iter = 0 To 40
         yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
@@ -1061,8 +1064,17 @@ Private Function ReadLabelSize() As Double
     End If
 End Function
 
-' Legend overflow from Buttons!K3: "above" puts a legend that fits no corner
+' Legend from Buttons!L3: "off" draws none (ReadLegendOff); overflow from Buttons!K3: "above" puts a legend that fits no corner
 ' above the plot; anything else (right, blank) puts it to the right.
+Private Function ReadLegendOff() As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    ReadLegendOff = (LCase$(CellText(ws.Range(LEGOFF_CELL).Value)) = "off")
+End Function
+
 Private Function ReadLegendAbove() As Boolean
     Dim ws As Worksheet
     On Error Resume Next
