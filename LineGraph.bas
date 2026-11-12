@@ -17,6 +17,7 @@ Private Const PA_HEIGHT     As Double = 0.75
 Private Const LG_RIGHT      As Double = 0.938    ' 'northeast'
 Private Const LG_TOP        As Double = 0.086
 Private Const LG_LINESP     As Double = 1.45
+Private Const LG_MAX_GROW   As Double = 2        ' an axis may grow to this many times its span for labels
 Private Const TICK_OFFSET   As Long = 20
 Private Const DO_LABELS     As Boolean = True    ' xgrapher: dolabels
 Private Const LABEL_FS      As Double = 10       ' point-label font size (pt, not scaled)
@@ -509,7 +510,6 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     On Error GoTo 0
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
-    If DO_LABELS Then FitPointLabels ch, nBlk, lblC, legCorner, xLog, yLog, W, H
     ch.Refresh                               ' draw the final layout now
     SaveFigure co                            ' PNG copy in FIG_DIR
 End Sub
@@ -887,7 +887,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     Dim sX1() As Double, sY1() As Double, sX2() As Double, sY2() As Double, nS As Long
     Dim j As Long, r As Long, tot As Long, x As Variant, y As Variant, e As Variant
     Dim txt As String, half As Double, hasPrev As Boolean, prevX As Double, prevY As Double
-    Dim tw As Double, th As Double
+    Dim tw As Double, th As Double, isL() As Boolean, lr As Long, lbX As Double, lbY As Double
+    Dim gU As Boolean, gD As Boolean, gL As Boolean, gR As Boolean, xLo0 As Double, yLo0 As Double
     Dim pL As Double, pT As Double, pW As Double, pH As Double, insX As Double, insY As Double
     Dim w1 As Double, h1 As Double, eW As Double, eH As Double, padW As Double, padH As Double
     Dim i As Long, xLo As Double, xHi As Double, yLo As Double, yHi As Double
@@ -905,6 +906,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     If tot = 0 Then Exit Sub
     ReDim oX(1 To 2 * tot): ReDim oY(1 To 2 * tot): ReDim offL(1 To 2 * tot)
     ReDim offT(1 To 2 * tot): ReDim offR(1 To 2 * tot): ReDim offB(1 To 2 * tot)
+    ReDim isL(1 To 2 * tot)
     ReDim sX1(1 To 2 * tot): ReDim sY1(1 To 2 * tot): ReDim sX2(1 To 2 * tot): ReDim sY2(1 To 2 * tot)
     half = msz / 2 + 1
     For j = 1 To n
@@ -919,7 +921,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                     txt = CellText(tws.Cells(r, lblC(j)).Value)
                     If Len(txt) > 0 Then
                         nO = nO + 1
-                        oX(nO) = CDbl(x): oY(nO) = CDbl(y)
+                        oX(nO) = CDbl(x): oY(nO) = CDbl(y): isL(nO) = True
                         tw = Len(txt) * fsTx * 0.55: th = fsTx * 0.6
                         Select Case lblPos           ' label box around the point (pt, y down)
                             Case xlLabelPositionLeft
@@ -1020,6 +1022,67 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         If gapH < 4 Or gapH > 40 Then gapH = 12
     End If
     kMax = n: If kMax > 2 Then kMax = 2          ' 1 or 2 columns
+
+    ' room for the point labels first (estimated boxes): an axis bound a label
+    ' crosses moves out a step (x10 on a log axis), up to 8 rounds. A minimum
+    ' never crosses below zero unless it already was, and no axis grows past
+    ' LG_MAX_GROW times its span (log: one decade), so labels never blow the
+    ' scale up; a label that still doesn't fit is left as it is.
+    xLo0 = ch.Axes(xlCategory).MinimumScale: yLo0 = ch.Axes(xlValue).MinimumScale
+    xHi0 = ch.Axes(xlCategory).MaximumScale: yHi0 = ch.Axes(xlValue).MaximumScale
+    For lr = 1 To 8
+        xLo = ch.Axes(xlCategory).MinimumScale: xHi = ch.Axes(xlCategory).MaximumScale
+        yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
+        gU = False: gD = False: gL = False: gR = False
+        For i = 1 To nO
+            If isL(i) Then
+                If MapV(oX(i), xLo, xHi, xLog, pL, pW, False, lbX) And _
+                   MapV(oY(i), yLo, yHi, yLog, pT, pH, True, lbY) Then
+                    If lbY + offT(i) < pT Then gU = True
+                    If lbY + offB(i) > pT + pH Then gD = True
+                    If lbX + offL(i) < pL Then gL = True
+                    If lbX + offR(i) > pL + pW Then gR = True
+                End If
+            End If
+        Next i
+        If Not (gU Or gD Or gL Or gR) Then Exit For
+        With ch.Axes(xlValue)
+            If gU Then
+                If yLog Then
+                    If yHi < yHi0 * 10 Then .MaximumScale = yHi * 10
+                ElseIf yHi + .MajorUnit - yLo <= LG_MAX_GROW * (yHi0 - yLo0) Then
+                    .MaximumScale = yHi + .MajorUnit
+                End If
+            End If
+            If gD Then
+                If yLog Then
+                    If yLo > yLo0 / 10 Then .MinimumScale = yLo / 10
+                ElseIf (yLo - .MajorUnit >= 0 Or yLo0 < 0) And _
+                       yHi - yLo + .MajorUnit <= LG_MAX_GROW * (yHi0 - yLo0) Then
+                    .MinimumScale = yLo - .MajorUnit
+                End If
+            End If
+        End With
+        With ch.Axes(xlCategory)
+            If gR Then
+                If xLog Then
+                    If xHi < xHi0 * 10 Then .MaximumScale = xHi * 10
+                ElseIf xHi + .MajorUnit - xLo <= LG_MAX_GROW * (xHi0 - xLo0) Then
+                    .MaximumScale = xHi + .MajorUnit
+                End If
+            End If
+            If gL Then
+                If xLog Then
+                    If xLo > xLo0 / 10 Then .MinimumScale = xLo / 10
+                ElseIf (xLo - .MajorUnit >= 0 Or xLo0 < 0) And _
+                       xHi - xLo + .MajorUnit <= LG_MAX_GROW * (xHi0 - xLo0) Then
+                    .MinimumScale = xLo - .MajorUnit
+                End If
+            End If
+        End With
+        If ch.Axes(xlCategory).MinimumScale = xLo And ch.Axes(xlCategory).MaximumScale = xHi And _
+           ch.Axes(xlValue).MinimumScale = yLo And ch.Axes(xlValue).MaximumScale = yHi Then Exit For
+    Next lr
     xHi0 = ch.Axes(xlCategory).MaximumScale
     yHi0 = ch.Axes(xlValue).MaximumScale
 
@@ -1274,73 +1337,6 @@ Private Sub NiceRange(ByVal lo As Double, ByVal hi As Double, ByRef axMin As Dou
         Exit Sub
     End If
     axMin = Round(a, 12): axMax = Round(b, 12): axStep = Round(s, 12)
-End Sub
-
-' Keeps every point label inside the plot box and off the legend: a label
-' past an edge moves that axis bound out a step (x10 on a log axis), and one
-' touching the legend raises the Y maximum (legend at the top) or lowers the
-' Y minimum (legend at the bottom); up to 6 rounds.
-Private Sub FitPointLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal legCorner As Long, _
-                           ByVal xLog As Boolean, ByVal yLog As Boolean, _
-                           ByVal W As Double, ByVal H As Double)
-    Dim iter As Long, j As Long, i As Long, hasLbl As Boolean
-    Dim goUp As Boolean, goDown As Boolean, goLeft As Boolean, goRight As Boolean
-    Dim pL As Double, pT As Double, pR As Double, pB As Double
-    Dim gL As Double, gT As Double, gR As Double, gB As Double
-    Dim dl As DataLabel
-    For j = 1 To n
-        If lblC(j) > 0 Then hasLbl = True
-    Next j
-    If Not hasLbl Then Exit Sub
-    On Error Resume Next
-    For iter = 0 To 6
-        ch.Refresh
-        DoEvents
-        pL = ch.PlotArea.InsideLeft: pT = ch.PlotArea.InsideTop
-        pR = pL + ch.PlotArea.InsideWidth: pB = pT + ch.PlotArea.InsideHeight
-        If legCorner >= 0 And legCorner <= 3 Then
-            gL = ch.Legend.Left: gT = ch.Legend.Top
-            gR = gL + ch.Legend.Width: gB = gT + ch.Legend.Height
-        End If
-        goUp = False: goDown = False: goLeft = False: goRight = False
-        For j = 1 To n
-            If lblC(j) > 0 Then
-                For i = 1 To ch.SeriesCollection(j).Points.Count
-                    If ch.SeriesCollection(j).Points(i).HasDataLabel Then
-                        Set dl = ch.SeriesCollection(j).Points(i).DataLabel
-                        If dl.Top < pT Then goUp = True
-                        If dl.Top + dl.Height > pB Then goDown = True
-                        If dl.Left < pL Then goLeft = True
-                        If dl.Left + dl.Width > pR Then goRight = True
-                        If legCorner >= 0 And legCorner <= 3 Then
-                            If dl.Left < gR And dl.Left + dl.Width > gL And _
-                               dl.Top < gB And dl.Top + dl.Height > gT Then
-                                If legCorner < 2 Then goUp = True Else goDown = True
-                            End If
-                        End If
-                    End If
-                Next i
-            End If
-        Next j
-        If Not (goUp Or goDown Or goLeft Or goRight) Or iter = 6 Then Exit For
-        With ch.Axes(xlValue)
-            If goUp Then
-                If yLog Then .MaximumScale = .MaximumScale * 10 Else .MaximumScale = .MaximumScale + .MajorUnit
-            End If
-            If goDown Then
-                If yLog Then .MinimumScale = .MinimumScale / 10 Else .MinimumScale = .MinimumScale - .MajorUnit
-            End If
-        End With
-        With ch.Axes(xlCategory)
-            If goRight Then
-                If xLog Then .MaximumScale = .MaximumScale * 10 Else .MaximumScale = .MaximumScale + .MajorUnit
-            End If
-            If goLeft Then
-                If xLog Then .MinimumScale = .MinimumScale / 10 Else .MinimumScale = .MinimumScale - .MajorUnit
-            End If
-        End With
-        AnchorLegend ch, legCorner, W, H
-    Next iter
 End Sub
 
 ' Align the legend to its corner of the plot box as finally drawn, using the
