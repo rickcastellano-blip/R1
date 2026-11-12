@@ -61,7 +61,7 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   | G7 | Color scheme: standard, stoplight, green→red, darkening pairs (as the Bar Graph's), pairs (light/full of each standard colour: light blue, blue, light red, red, gray, black, ...) |
   | H7 | Marker Size: points (2–72); blank = default |
   | I7 | Line Width: points (0.25–10), line and marker outline; blank = default |
-  | J7 | Label Position: right (default), above, below, left, or in (centred on the point) |
+  | J7 | Label Position: right (default), above, below, left, in (centred on the point), or upper right |
   | K7 | Label font size: points (4–72); blank = 10 |
   | L7 | Width: figure width in inches (1–20); blank = 5. Only the plot widens: height, text, lines and the left/right margins stay fixed |
 

@@ -31,7 +31,8 @@ Private Const LINE_CELL      As String = "F7"     ' 1 = connecting lines, 0 = ma
 Private Const SCHEME_CELL    As String = "G7"     ' standard / stoplight / green->red
 Private Const MARKER_CELL    As String = "H7"     ' marker size in pt (2-72); blank = default
 Private Const LINEW_CELL     As String = "I7"     ' line + marker outline width in pt; blank = default
-Private Const LBLPOS_CELL    As String = "J7"     ' point labels: right, above, below, left or in
+Private Const LBLPOS_CELL    As String = "J7"     ' point labels: right, above, below, left, in or upper right
+Private Const LP_UPRIGHT     As Long = 9001       ' "upper right": not an Excel position; Right, then moved up
 Private Const LBLFS_CELL     As String = "K7"     ' point-label font size in pt; blank = LABEL_FS
 ' =========================================================
 Sub GenerateLineGraph()
@@ -510,6 +511,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     On Error GoTo 0
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
+    If DO_LABELS And lblPos = LP_UPRIGHT Then RaiseLabels ch, nBlk, lblC, msz
     ch.Refresh                               ' draw the final layout now
     SaveFigure co                            ' PNG copy in FIG_DIR
 End Sub
@@ -560,7 +562,7 @@ Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double, ByVal l
         .ShowSeriesName = False
         .ShowCategoryName = False
         .ShowLegendKey = False
-        .Position = lblPos
+        If lblPos = LP_UPRIGHT Then .Position = xlLabelPositionRight Else .Position = lblPos
         If lblPos = xlLabelPositionCenter Then .HorizontalAlignment = xlCenter
         .Font.Name = FONT_NAME
         .Font.Size = fs
@@ -778,6 +780,7 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef
         Case "below": lblPos = xlLabelPositionBelow
         Case "left":  lblPos = xlLabelPositionLeft
         Case "in":    lblPos = xlLabelPositionCenter
+        Case "upper right": lblPos = LP_UPRIGHT
     End Select
 
     v = ws.Range(LBLFS_CELL).Value
@@ -932,6 +935,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                                 offL(nO) = -tw / 2: offR(nO) = tw / 2: offT(nO) = half: offB(nO) = half + 4 + 2 * th
                             Case xlLabelPositionCenter
                                 offL(nO) = -tw / 2: offR(nO) = tw / 2: offT(nO) = -th: offB(nO) = th
+                            Case LP_UPRIGHT
+                                offL(nO) = half / 2: offR(nO) = half / 2 + 4 + tw: offT(nO) = -half / 2 - 2 * th: offB(nO) = -half / 2
                             Case Else
                                 offL(nO) = half: offR(nO) = half + 4 + tw: offT(nO) = -th: offB(nO) = th
                         End Select
@@ -1337,6 +1342,29 @@ Private Sub NiceRange(ByVal lo As Double, ByVal hi As Double, ByRef axMin As Dou
         Exit Sub
     End If
     axMin = Round(a, 12): axMax = Round(b, 12): axStep = Round(s, 12)
+End Sub
+
+' "upper right" point labels: Excel has no such position, so each label is
+' drawn to the right of its point and then moved up until its bottom sits
+' just above the point (its lower-left corner off the marker's upper right).
+Private Sub RaiseLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal msz As Double)
+    Dim j As Long, i As Long
+    On Error Resume Next
+    ch.Refresh
+    DoEvents
+    For j = 1 To n
+        If lblC(j) > 0 Then
+            For i = 1 To ch.SeriesCollection(j).Points.Count
+                If ch.SeriesCollection(j).Points(i).HasDataLabel Then
+                    With ch.SeriesCollection(j).Points(i).DataLabel
+                        .Position = xlLabelPositionRight
+                        .Left = .Left - msz / 4
+                        .Top = .Top - .Height / 2 - msz / 4
+                    End With
+                End If
+            Next i
+        End If
+    Next j
 End Sub
 
 ' Align the legend to its corner of the plot box as finally drawn, using the
