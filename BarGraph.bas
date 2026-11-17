@@ -28,7 +28,7 @@ Private Const SCHEME_CELL    As String = "G3"
 Private Const LABELDIR_CELL  As String = "H3"   ' bar labels: horiz or vert
 Private Const LABELFS_CELL   As String = "I3"   ' bar-label font size (pt); blank = LABEL_FS
 Private Const LEGOFF_CELL    As String = "L3"   ' "off" = no legend
-Private Const LEGOVER_CELL   As String = "K3"   ' legend that fits no corner: above or right (default)
+Private Const LEGOVER_CELL   As String = "K3"   ' legend that fits no corner: above / right (default); "force above" / "force right" skip the corners
 Private Const GAP_SINGLE    As Long = 80
 Private Const LABEL_FS      As Double = 10       ' default bar-label font size (pt, not scaled)
 ' =========================================================
@@ -386,7 +386,7 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     ' maximum if no corner is clear, or put the legend outside the plot
     PlaceBarLegend ch, tws, W, H, nBlk, nRow, ch.ChartGroups(1).GapWidth, fsL * LG_LINESP, _
                    blkRow, rc, valC, errC, lblC, vertLbl, lblFs, ReadLegendAbove(), _
-                   legCorner, legExtraW, legExtraH
+                   ReadLegendForced(), legCorner, legExtraW, legExtraH
     If legCorner = -1 Then ch.HasLegend = False         ' Buttons!L3 = off
     If legCorner = 5 Then topShift = Px(legExtraH)    ' legend above: plot moves down
 
@@ -623,7 +623,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                            ByVal lineH As Double, blkRow() As Long, rc() As Long, _
                            ByVal valC As Long, ByVal errC As Long, lblC() As Long, _
                            ByVal vertLbl As Boolean, ByVal lblFs As Double, ByVal legAbove As Boolean, _
-                           ByRef legCorner As Long, ByRef extraW As Double, ByRef extraH As Double)
+                           ByVal legForced As Boolean, ByRef legCorner As Long, ByRef extraW As Double, ByRef extraH As Double)
     Dim bx0() As Double, bx1() As Double, by0() As Double, by1() As Double, nB As Long
     Dim bL() As Double, t As Variant
     Dim j As Long, cIdx As Long, v As Variant, e As Variant, barW As Double, barTop As Double
@@ -751,6 +751,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     Next iter
     yHi0 = ch.Axes(xlValue).MaximumScale
     If ReadLegendOff() Then legCorner = -1: Exit Sub    ' no legend: only the label room
+    If legForced Then GoTo Outside                      ' K3 "force ...": no corner search
 
     For iter = 0 To 40
         yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
@@ -1046,7 +1047,20 @@ Private Function ReadLegendAbove() As Boolean
     Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
     On Error GoTo 0
     If ws Is Nothing Then Exit Function
-    ReadLegendAbove = (LCase$(CellText(ws.Range(LEGOVER_CELL).Value)) = "above")
+    Select Case LCase$(CellText(ws.Range(LEGOVER_CELL).Value))
+        Case "above", "force above": ReadLegendAbove = True
+    End Select
+End Function
+
+' Buttons!K3 "force right" / "force above": the legend goes outside the plot
+' straight away, without trying the corners.
+Private Function ReadLegendForced() As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    ReadLegendForced = (Left$(LCase$(CellText(ws.Range(LEGOVER_CELL).Value)), 6) = "force ")
 End Function
 
 Private Function ReadScheme() As String
