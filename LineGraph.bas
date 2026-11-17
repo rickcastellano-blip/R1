@@ -957,6 +957,9 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     padH = h1 - n * eH
     If padH > 8 Then padH = 8
     If padH < 4 Then padH = 4
+    ' Excel can report entries spread over a tall box (seen with other display
+    ' scaling); one line of text is all an entry needs
+    If eH > lineH Then eH = lineH
 
     ' Excel may already have wrapped a long name when it was measured: an entry
     ' is never sized narrower than its longest name on one line
