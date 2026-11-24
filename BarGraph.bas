@@ -858,9 +858,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                                    yLo, yHi, pL, pT, pW, pH)
                     If corner = logoCorner Then hits = 999   ' the logo's corner
                     If logoCorner >= 0 And logoCorner <= 3 Then  ' or reaching over the logo
-                        ' (with a quarter of the legend's width to spare either side: Excel
-                        ' often draws a 2-column legend wider than asked)
-                        If lx - lw / 4 < lgX + logoW + 4 And lx + lw * 1.25 > lgX - 4 And _
+                        If lx < lgX + logoW + 4 And lx + lw > lgX - 4 And _
                            ly < lgY + logoH + 4 And ly + lh > lgY - 4 Then hits = 999
                     End If
                     sc = hits * 1000 + (k - 1) * 4 + corner
