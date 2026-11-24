@@ -139,6 +139,8 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
     Else
         lastR = Application.Min(stopR - 1, ur.Row + ur.Rows.Count - 1)
     End If
+    ' the graph's rows end at two fully empty rows (label column to last header column)
+    lastR = Application.Min(lastR, GraphEndRow(tws, tagR, tagC, stopR))
     If lastR < tagR + 2 Then MsgBox "No data rows found below the tag in " & _
                                     f.Address(False, False) & ".", vbExclamation: Exit Sub
 
@@ -1164,29 +1166,44 @@ Private Function ReadLegendForced() As Boolean
     ReadLegendForced = (Left$(LCase$(CellText(ws.Range(LEGOVER_CELL).Value)), 6) = "force ")
 End Function
 
-' The logo named next to a "logo" tag in column tagC below the graph tag.
-' The search walks down from the header row and gives up at two rows in a row
-' that are completely empty from the name column (one left of the tag) to the
-' last header column, at another graph tag, or at row stopR; so a logo tag
-' belongs to the graph above it only with at most one empty row between.
-Private Function FindLogoName(ws As Worksheet, ByVal tagR As Long, ByVal tagC As Long, _
-                              ByVal stopR As Long) As String
-    Dim hdrR As Long, lastC As Long, r As Long, nBlank As Long, t As String
-    If tagC < 2 Then Exit Function
+' Last row of the graph whose tag is at (tagR, tagC): walking down from the
+' header row, the graph ends before two rows in a row that are completely
+' empty from the name column (one left of the tag) to the last header column,
+' before another graph tag in the tag's column, or at row stopR - 1.
+Private Function GraphEndRow(ws As Worksheet, ByVal tagR As Long, ByVal tagC As Long, _
+                             ByVal stopR As Long) As Long
+    Dim hdrR As Long, c0 As Long, lastC As Long, r As Long, t As String
     hdrR = tagR + 1
+    c0 = tagC - 1: If c0 < 1 Then c0 = 1
     lastC = tagC
     Do While Len(CellText(ws.Cells(hdrR, lastC + 1).Value)) > 0 And lastC < tagC + 40
         lastC = lastC + 1
     Loop
+    GraphEndRow = stopR - 1
     For r = hdrR + 1 To stopR - 1
-        If Application.CountA(ws.Range(ws.Cells(r, tagC - 1), ws.Cells(r, lastC))) = 0 Then
-            nBlank = nBlank + 1
-            If nBlank >= 2 Then Exit Function
-        Else
-            nBlank = 0
-            t = LCase$(CellText(ws.Cells(r, tagC).Value))
-            If t = "logo" Then FindLogoName = CellText(ws.Cells(r, tagC - 1).Value): Exit Function
-            If t = "bargraph" Or Left$(t, 5) = "graph" Then Exit Function
+        t = LCase$(CellText(ws.Cells(r, tagC).Value))
+        If t = "bargraph" Or Left$(t, 5) = "graph" Then GraphEndRow = r - 1: Exit Function
+        If Application.CountA(ws.Range(ws.Cells(r, c0), ws.Cells(r, lastC))) = 0 Then
+            If r < stopR - 1 Then
+                If Application.CountA(ws.Range(ws.Cells(r + 1, c0), ws.Cells(r + 1, lastC))) = 0 Then
+                    GraphEndRow = r - 1: Exit Function
+                End If
+            End If
+        End If
+    Next r
+End Function
+
+' The logo named next to a "logo" tag in column tagC within the graph's rows
+' (see GraphEndRow), so at most one empty row may come before it.
+Private Function FindLogoName(ws As Worksheet, ByVal tagR As Long, ByVal tagC As Long, _
+                              ByVal stopR As Long) As String
+    Dim r As Long, endR As Long
+    If tagC < 2 Then Exit Function
+    endR = GraphEndRow(ws, tagR, tagC, stopR)
+    For r = tagR + 2 To endR
+        If LCase$(CellText(ws.Cells(r, tagC).Value)) = "logo" Then
+            FindLogoName = CellText(ws.Cells(r, tagC - 1).Value)
+            Exit Function
         End If
     Next r
 End Function
