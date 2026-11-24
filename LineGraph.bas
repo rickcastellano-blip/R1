@@ -1392,8 +1392,10 @@ Private Sub NiceRange(ByVal lo As Double, ByVal hi As Double, ByRef axMin As Dou
 End Sub
 
 ' "upper right" point labels: Excel has no such position, so each label is
-' drawn to the right of its point and then moved up until its bottom sits
-' just above the point (its lower-left corner off the marker's upper right).
+' drawn to the right of its point and then nudged up by 40 % of its height,
+' as little as reads as upper right. Excel draws a leader line only for a
+' label moved well away from its own spot, so these stay without one, while
+' a label later dragged away by hand still gets one (leader lines stay on).
 Private Sub RaiseLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal msz As Double)
     Dim j As Long, i As Long
     On Error Resume Next
@@ -1405,8 +1407,7 @@ Private Sub RaiseLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal msz 
                 If ch.SeriesCollection(j).Points(i).HasDataLabel Then
                     With ch.SeriesCollection(j).Points(i).DataLabel
                         .Position = xlLabelPositionRight
-                        .Left = .Left - msz / 4
-                        .Top = .Top - .Height / 2 - msz / 4
+                        .Top = .Top - .Height * 0.4
                     End With
                 End If
             Next i
