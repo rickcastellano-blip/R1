@@ -1436,7 +1436,7 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
     Dim ptX() As Double, ptY() As Double, ptS() As Long, nP As Long, tot As Long
     Dim bxL() As Double, bxT() As Double, bxR() As Double, bxB() As Double, nBx As Long
     Dim j As Long, i As Long, k As Long, m As Long, x As Variant, y As Variant
-    Dim ptx0 As Double, pty0 As Double, w As Double, h As Double, g As Double
+    Dim ptx0 As Double, pty0 As Double, w As Double, h As Double, g As Double, gd As Double
     Dim cand As Variant, cx As Double, cy As Double, sc As Double, bestSc As Double
     Dim bestX As Double, bestY As Double, qx As Double, qy As Double, ov As Double
     Dim dl As DataLabel, shp As Shape
@@ -1448,7 +1448,10 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
     pW = ch.PlotArea.InsideWidth: pH = ch.PlotArea.InsideHeight
     xLo = ch.Axes(xlCategory).MinimumScale: xHi = ch.Axes(xlCategory).MaximumScale
     yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
-    g = msz / 2 + 2
+    ' gaps from the point's centre to the label box: the box has ~3 pt of
+    ' empty margin round its text, so the text ends up just off the marker
+    g = msz / 2 - 2: If g < 1 Then g = 1          ' beside, above, below
+    gd = msz * 0.3                                ' diagonal: box corner just off the round marker
 
     ' every point on screen, with its series (for the connecting lines)
     For j = 1 To n: tot = tot + rc(j): Next j
@@ -1496,14 +1499,14 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
                             bestSc = -1
                             For k = 0 To 7
                                 Select Case cand(k)
-                                    Case 0: cx = ptx0 + g: cy = pty0 - g - h            ' upper right
+                                    Case 0: cx = ptx0 + gd: cy = pty0 - gd - h           ' upper right
                                     Case 1: cx = ptx0 + g: cy = pty0 - h / 2            ' right
-                                    Case 2: cx = ptx0 - g - w: cy = pty0 - g - h        ' upper left
+                                    Case 2: cx = ptx0 - gd - w: cy = pty0 - gd - h       ' upper left
                                     Case 3: cx = ptx0 - w / 2: cy = pty0 - g - h        ' above
-                                    Case 4: cx = ptx0 + g: cy = pty0 + g                ' lower right
+                                    Case 4: cx = ptx0 + gd: cy = pty0 + gd               ' lower right
                                     Case 5: cx = ptx0 - w / 2: cy = pty0 + g            ' below
                                     Case 6: cx = ptx0 - g - w: cy = pty0 - h / 2        ' left
-                                    Case 7: cx = ptx0 - g - w: cy = pty0 + g            ' lower left
+                                    Case 7: cx = ptx0 - gd - w: cy = pty0 + gd           ' lower left
                                 End Select
                                 sc = 0
                                 ' outside the plot box
@@ -1518,8 +1521,9 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
                                 Next m
                                 ' markers
                                 For m = 1 To nP
-                                    sc = sc + Overlap(cx, cy, cx + w, cy + h, ptX(m) - msz / 2, ptY(m) - msz / 2, _
-                                                      ptX(m) + msz / 2, ptY(m) + msz / 2)
+                                    ' (a box inside the round marker, so a label's margin may graze it)
+                                    sc = sc + Overlap(cx + 3, cy + 3, cx + w - 3, cy + h - 3, ptX(m) - msz / 3, ptY(m) - msz / 3, _
+                                                      ptX(m) + msz / 3, ptY(m) + msz / 3)
                                 Next m
                                 ' connecting lines (sampled)
                                 If useLine Then
