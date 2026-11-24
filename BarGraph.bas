@@ -1184,7 +1184,7 @@ End Function
 ' The logo picture LOGO_DIR\<name>.png / .jpg / .jpeg / .gif / .bmp, put in the
 ' chart as wide as Buttons!N3 says (LOGO_W if blank), in its own proportions. Nothing if no such file.
 Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
-    Dim ext As Variant, f As String, img As Object, asp As Double, lw As Double
+    Dim ext As Variant, f As String, img As Object, pic As Object, asp As Double, lw As Double
     For Each ext In Array(".png", ".jpg", ".jpeg", ".gif", ".bmp")
         If Len(Dir(LOGO_DIR & "\" & nm & ext)) > 0 Then f = LOGO_DIR & "\" & nm & ext: Exit For
     Next ext
@@ -1193,25 +1193,34 @@ Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
         Exit Function
     End If
     On Error Resume Next
-    Set AddLogo = ch.Shapes.AddPicture(f, msoFalse, msoTrue, 0, 0, -1, -1)
-    If AddLogo Is Nothing Then Exit Function
-    ' the picture's own proportions: read from the file (WIA knows PNG / JPG
-    ' sizes), else from the inserted size; then set both sides, as Excel can
-    ' stretch a picture in a chart when only one side is set
+    ' the picture's own proportions, from the file: WIA reads PNG / JPG / GIF /
+    ' BMP sizes; LoadPicture (JPG / GIF / BMP) is the fallback
     asp = 0
     Set img = CreateObject("WIA.ImageFile")
     If Not img Is Nothing Then
         img.LoadFile f
         If img.Width > 0 Then asp = img.Height / img.Width
     End If
-    If asp <= 0 And AddLogo.Width > 0 Then asp = AddLogo.Height / AddLogo.Width
+    If asp <= 0 Then
+        Set pic = LoadPicture(f)
+        If Not pic Is Nothing Then
+            If pic.Width > 0 Then asp = pic.Height / pic.Width
+        End If
+    End If
     If asp <= 0 Then asp = 0.6
-    AddLogo.LockAspectRatio = msoFalse
+    ' a plain rectangle filled with the picture: a picture object placed in a
+    ' chart (Chart.Shapes.AddPicture) can be saved in a form Excel later
+    ' reports as damaged ("Repaired Records: Drawing ... (Drawing shape)")
     lw = ReadLogoWidth()
-    AddLogo.Width = lw
-    AddLogo.Height = lw * asp
-    AddLogo.LockAspectRatio = msoTrue
-    AddLogo.Name = "Logo"
+    Set AddLogo = ch.Shapes.AddShape(msoShapeRectangle, 0, 0, lw, lw * asp)
+    If AddLogo Is Nothing Then Exit Function
+    With AddLogo
+        .Line.Visible = msoFalse
+        .Fill.Visible = msoTrue
+        .Fill.UserPicture f
+        .LockAspectRatio = msoTrue
+        .Name = "Logo"
+    End With
 End Function
 
 ' Puts the logo in its corner of the plot box as finally drawn (inset like

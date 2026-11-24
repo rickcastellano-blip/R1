@@ -1440,7 +1440,7 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
     Dim ptx0 As Double, pty0 As Double, w As Double, h As Double, g As Double, gd As Double
     Dim cand As Variant, cx As Double, cy As Double, sc As Double, bestSc As Double
     Dim bestX As Double, bestY As Double, qx As Double, qy As Double, ov As Double
-    Dim dl As DataLabel, shp As Shape
+    Dim dl As DataLabel, shp As Shape, dOwn As Double
 
     On Error Resume Next
     ch.Refresh
@@ -1520,6 +1520,14 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
                                     ov = Overlap(cx, cy, cx + w, cy + h, bxL(m), bxT(m), bxR(m), bxB(m))
                                     sc = sc + ov
                                 Next m
+                                ' ambiguity: another point at least as near the label's text
+                                ' as its own point reads as that point's label
+                                dOwn = BoxDist(cx + 3, cy + 3, cx + w - 3, cy + h - 3, ptx0, pty0)
+                                For m = 1 To nP
+                                    If Abs(ptX(m) - ptx0) > 0.5 Or Abs(ptY(m) - pty0) > 0.5 Then
+                                        If BoxDist(cx + 3, cy + 3, cx + w - 3, cy + h - 3, ptX(m), ptY(m)) < dOwn + 2 Then sc = sc + 300
+                                    End If
+                                Next m
                                 ' markers
                                 For m = 1 To nP
                                     ' (a box inside the round marker, so a label's margin may graze it)
@@ -1555,6 +1563,23 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
         End If
     Next j
 End Sub
+
+' Distance (pt) from a point to a box given as left, top, right, bottom (0 inside).
+Private Function BoxDist(ByVal bL As Double, ByVal bT As Double, ByVal bR As Double, ByVal bB As Double, _
+                         ByVal x As Double, ByVal y As Double) As Double
+    Dim dx As Double, dy As Double
+    If x < bL Then
+        dx = bL - x
+    ElseIf x > bR Then
+        dx = x - bR
+    End If
+    If y < bT Then
+        dy = bT - y
+    ElseIf y > bB Then
+        dy = y - bB
+    End If
+    BoxDist = Sqr(dx * dx + dy * dy)
+End Function
 
 ' Area (pt^2) shared by two boxes given as left, top, right, bottom.
 Private Function Overlap(ByVal aL As Double, ByVal aT As Double, ByVal aR As Double, ByVal aB As Double, _
@@ -1598,7 +1623,7 @@ End Function
 ' The logo picture LOGO_DIR\<name>.png / .jpg / .jpeg / .gif / .bmp, put in the
 ' chart as wide as Buttons!N7 says (LOGO_W if blank), in its own proportions. Nothing if no such file.
 Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
-    Dim ext As Variant, f As String, img As Object, asp As Double, lw As Double
+    Dim ext As Variant, f As String, img As Object, pic As Object, asp As Double, lw As Double
     For Each ext In Array(".png", ".jpg", ".jpeg", ".gif", ".bmp")
         If Len(Dir(LOGO_DIR & "\" & nm & ext)) > 0 Then f = LOGO_DIR & "\" & nm & ext: Exit For
     Next ext
@@ -1607,25 +1632,34 @@ Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
         Exit Function
     End If
     On Error Resume Next
-    Set AddLogo = ch.Shapes.AddPicture(f, msoFalse, msoTrue, 0, 0, -1, -1)
-    If AddLogo Is Nothing Then Exit Function
-    ' the picture's own proportions: read from the file (WIA knows PNG / JPG
-    ' sizes), else from the inserted size; then set both sides, as Excel can
-    ' stretch a picture in a chart when only one side is set
+    ' the picture's own proportions, from the file: WIA reads PNG / JPG / GIF /
+    ' BMP sizes; LoadPicture (JPG / GIF / BMP) is the fallback
     asp = 0
     Set img = CreateObject("WIA.ImageFile")
     If Not img Is Nothing Then
         img.LoadFile f
         If img.Width > 0 Then asp = img.Height / img.Width
     End If
-    If asp <= 0 And AddLogo.Width > 0 Then asp = AddLogo.Height / AddLogo.Width
+    If asp <= 0 Then
+        Set pic = LoadPicture(f)
+        If Not pic Is Nothing Then
+            If pic.Width > 0 Then asp = pic.Height / pic.Width
+        End If
+    End If
     If asp <= 0 Then asp = 0.6
-    AddLogo.LockAspectRatio = msoFalse
+    ' a plain rectangle filled with the picture: a picture object placed in a
+    ' chart (Chart.Shapes.AddPicture) can be saved in a form Excel later
+    ' reports as damaged ("Repaired Records: Drawing ... (Drawing shape)")
     lw = ReadLogoWidth()
-    AddLogo.Width = lw
-    AddLogo.Height = lw * asp
-    AddLogo.LockAspectRatio = msoTrue
-    AddLogo.Name = "Logo"
+    Set AddLogo = ch.Shapes.AddShape(msoShapeRectangle, 0, 0, lw, lw * asp)
+    If AddLogo Is Nothing Then Exit Function
+    With AddLogo
+        .Line.Visible = msoFalse
+        .Fill.Visible = msoTrue
+        .Fill.UserPicture f
+        .LockAspectRatio = msoTrue
+        .Name = "Logo"
+    End With
 End Function
 
 ' Puts the logo in its corner of the plot box as finally drawn (inset like
