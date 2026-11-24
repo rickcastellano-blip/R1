@@ -382,7 +382,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
         For j = 1 To nBlk
             If lblC(j) > 0 Then
                 AddPointLabels ch.SeriesCollection(j), _
-                               tws.Cells(blkRow(j), lblC(j)).Resize(rc(j), 1), fsTx, lblPos
+                               tws.Cells(blkRow(j), lblC(j)).Resize(rc(j), 1), fsTx, lblPos, _
+                               tws.Cells(blkRow(j), xC).Resize(rc(j), 1), tws.Cells(blkRow(j), yC).Resize(rc(j), 1)
             End If
         Next j
     End If
@@ -576,7 +577,8 @@ End Function
 
 ' Data labels to the right of each point, text taken from lblRng (xgrapher:
 ' text(x, y, label, 'HorizontalAlignment', 'left', 'VerticalAlignment', 'middle')).
-Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double, ByVal lblPos As Long)
+Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double, ByVal lblPos As Long, _
+                           xRng As Range, yRng As Range)
     Dim i As Long, v As Variant, linked As Boolean
 
     ser.HasDataLabels = True
@@ -615,18 +617,21 @@ Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double, ByVal l
     End With
     On Error GoTo 0
 
-    ' error cells get no label (xgrapher skips "ActiveX VT_ERROR:"); on older
-    ' Excel, copy each cell's text in as a static label instead
+    ' error and blank cells get no label (xgrapher skips "ActiveX VT_ERROR:"),
+    ' nor does a point that isn't drawn (X or Y blank / #N/A): Excel has no
+    ' position for such a label, and one that is later moved is saved with a
+    ' broken position that makes Excel "repair" the workbook. On older Excel,
+    ' each cell's text is copied in as a static label instead.
     For i = 1 To Application.Min(lblRng.Rows.Count, ser.Points.Count)
         v = lblRng.Cells(i, 1).Value
         If IsError(v) Then
             ser.Points(i).HasDataLabel = False
+        ElseIf Len(Trim$(CStr(v))) = 0 Then
+            ser.Points(i).HasDataLabel = False
+        ElseIf Not (IsNum(xRng.Cells(i, 1).Value) And IsNum(yRng.Cells(i, 1).Value)) Then
+            ser.Points(i).HasDataLabel = False
         ElseIf Not linked Then
-            If Len(Trim$(CStr(v))) = 0 Then
-                ser.Points(i).HasDataLabel = False
-            Else
-                ser.Points(i).DataLabel.Text = CStr(v)
-            End If
+            ser.Points(i).DataLabel.Text = CStr(v)
         End If
     Next i
 End Sub
@@ -1426,7 +1431,7 @@ Private Sub RaiseLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal msz 
                 If ch.SeriesCollection(j).Points(i).HasDataLabel Then
                     With ch.SeriesCollection(j).Points(i).DataLabel
                         .Position = xlLabelPositionRight
-                        .Top = .Top - .Height * 0.4
+                        If OkPos(.Top) And OkPos(.Height) Then .Top = .Top - .Height * 0.4
                     End With
                 End If
             Next i
@@ -1510,6 +1515,7 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
                            MapV(CDbl(y), yLo, yHi, yLog, pT, pH, True, pty0) Then
                             Set dl = ch.SeriesCollection(j).Points(i).DataLabel
                             w = dl.Width: h = dl.Height
+                            If Not (OkPos(w) And OkPos(h) And w > 0 And h > 0) Then GoTo NextLabel
                             bestSc = -1
                             For k = 0 To 7
                                 Select Case cand(k)
@@ -1562,7 +1568,7 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
                                 If bestSc < 0 Or sc < bestSc Then bestSc = sc: bestX = cx: bestY = cy
                                 If sc = 0 Then Exit For
                             Next k
-                            dl.Left = bestX: dl.Top = bestY
+                            If OkPos(bestX) And OkPos(bestY) Then dl.Left = bestX: dl.Top = bestY
                             nBx = nBx + 1
                             If nBx > UBound(bxL) Then
                                 ReDim Preserve bxL(1 To nBx): ReDim Preserve bxT(1 To nBx)
@@ -1572,10 +1578,17 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
                         End If
                     End If
                 End If
+NextLabel:
             Next i
         End If
     Next j
 End Sub
+
+' True for an ordinary number: False for the "not a number" Excel can report
+' for a label it has no position for (writing that back damages the file).
+Private Function OkPos(ByVal v As Double) As Boolean
+    OkPos = (v > -1E+30 And v < 1E+30)
+End Function
 
 ' Distance (pt) from a point to a box given as left, top, right, bottom (0 inside).
 Private Function BoxDist(ByVal bL As Double, ByVal bT As Double, ByVal bR As Double, ByVal bB As Double, _

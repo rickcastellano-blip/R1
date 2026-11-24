@@ -475,7 +475,7 @@ Private Sub LiftBarLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
                                     ' way round Excel reports its size
                                     hL = .Height
                                     If .Orientation = xlUpward And .Width > hL Then hL = .Width
-                                    .Top = yTop - hL - 2
+                                    If OkPos(hL) And OkPos(yTop) And hL > 0 Then .Top = yTop - hL - 2
                                 End If
                             End With
                         End If
@@ -624,6 +624,12 @@ Private Function HeaderCols(ws As Worksheet, ByVal hdrR As Long, ByVal c0 As Lon
         End Select
     Next c
     HeaderCols = (hE + hX + hN > 0)
+End Function
+
+' True for an ordinary number: False for the "not a number" Excel can report
+' for a label it has no position for (writing that back damages the file).
+Private Function OkPos(ByVal v As Double) As Boolean
+    OkPos = (v > -1E+30 And v < 1E+30)
 End Function
 
 ' Round a size in points to whole screen pixels (0.75 pt at 96 dpi), so
