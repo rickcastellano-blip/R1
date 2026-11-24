@@ -904,7 +904,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     Dim bSc As Long, bHits As Long, bW As Double, bH As Double, bX As Double, bY As Double
     Dim fSc As Long, fHits As Long, fW As Double, fH As Double, fX As Double, fY As Double
 
-    Dim lgRank As Variant, cNames As Variant, yStart As Double
+    Dim lgRank As Variant, cNames As Variant, yStart As Double, lgX As Double, lgY As Double
     On Error GoTo Done
     logoCorner = -1: topBand = 0
 
@@ -1135,6 +1135,10 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         End If
     End If
     extraH = topBand
+    If logoCorner >= 0 And logoCorner <= 3 Then      ' where the logo sits, for the legend
+        If logoCorner Mod 2 = 0 Then lgX = pL + pW - insX - logoW Else lgX = pL + insX
+        If logoCorner < 2 Then lgY = pT + insY Else lgY = pT + pH - insY - logoH
+    End If
 
     xHi0 = ch.Axes(xlCategory).MaximumScale
     yHi0 = ch.Axes(xlValue).MaximumScale
@@ -1159,6 +1163,10 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                                       nS, sX1, sY1, sX2, sY2, xLo, xHi, yLo, yHi, _
                                       xLog, yLog, pL, pT, pW, pH)
                     If corner = logoCorner Then hits = 999   ' the logo's corner
+                    If logoCorner >= 0 And logoCorner <= 3 Then  ' or reaching over the logo
+                        If lx < lgX + logoW + 4 And lx + lw > lgX - 4 And _
+                           ly < lgY + logoH + 4 And ly + lh > lgY - 4 Then hits = 999
+                    End If
                     sc = hits * 1000 + (k - 1) * 4 + corner
                     If sc < bSc Then
                         bSc = sc: bHits = hits: bK = k: bC = corner: bW = lw: bH = lh: bX = lx: bY = ly

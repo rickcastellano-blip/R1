@@ -677,7 +677,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     Dim bSc As Long, bHits As Long, bK As Long, bC As Long
     Dim bW As Double, bH As Double, bX As Double, bY As Double
 
-    Dim lgRank As Variant, cNames As Variant, yStart As Double
+    Dim lgRank As Variant, cNames As Variant, yStart As Double, lgX As Double, lgY As Double
     On Error GoTo Done
     legCorner = 0: extraW = 0: extraH = 0: logoCorner = -1: topBand = 0
     If n < 1 Or nCat < 1 Then Exit Sub
@@ -829,6 +829,10 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
         End If
     End If
     extraH = topBand
+    If logoCorner >= 0 And logoCorner <= 3 Then      ' where the logo sits, for the legend
+        If logoCorner Mod 2 = 0 Then lgX = pL + pW - insX - logoW Else lgX = pL + insX
+        If logoCorner < 2 Then lgY = pT + insY Else lgY = pT + pH - insY - logoH
+    End If
 
     yHi0 = ch.Axes(xlValue).MaximumScale
     If ReadLegendOff() Then legCorner = -1: Exit Sub    ' no legend: only the label room
@@ -848,6 +852,10 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
                     hits = BarHits(lx, ly, lw, lh, nB, bx0, bx1, by0, by1, bL, nCat, _
                                    yLo, yHi, pL, pT, pW, pH)
                     If corner = logoCorner Then hits = 999   ' the logo's corner
+                    If logoCorner >= 0 And logoCorner <= 3 Then  ' or reaching over the logo
+                        If lx < lgX + logoW + 4 And lx + lw > lgX - 4 And _
+                           ly < lgY + logoH + 4 And ly + lh > lgY - 4 Then hits = 999
+                    End If
                     sc = hits * 1000 + (k - 1) * 4 + corner
                     If sc < bSc Then
                         bSc = sc: bHits = hits: bK = k: bC = corner: bW = lw: bH = lh: bX = lx: bY = ly
