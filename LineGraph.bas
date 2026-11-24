@@ -671,17 +671,22 @@ End Function
 ' <sheet> <chart name>.png, at screen resolution. Silent: if it fails, no PNG
 ' and no message.
 Private Sub SaveFigure(co As ChartObject)
-    Dim fName As String, bad As Variant
+    Dim fName As String, bad As Variant, su As Boolean
 
     fName = co.Parent.Name & " " & co.Name
     For Each bad In Array("\", "/", ":", "*", "?", Chr(34), "<", ">", "|")
         fName = Replace(fName, bad, "_")
     Next bad
 
+    ' Excel redraws the sheet at 100 % zoom to export a chart, which shows as a
+    ' zoom in / out flash; with screen updating off the flash isn't drawn
+    su = Application.ScreenUpdating
+    Application.ScreenUpdating = False
     On Error Resume Next
     If Len(Dir(FIG_DIR, vbDirectory)) = 0 Then MkDir FIG_DIR
     co.Chart.Export Filename:=FIG_DIR & "\" & fName & ".png", FilterName:="PNG"
     On Error GoTo 0
+    Application.ScreenUpdating = su
 End Sub
 
 ' Column-header tags in the row below the graph tag, from column c0 to the
