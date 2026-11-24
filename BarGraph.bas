@@ -893,6 +893,9 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     ' then pull a one-column legend in 4 % at a time while no name wraps, for
     ' a snug box (a 2-column one would reflow into one column instead)
     For wq = 1 To IIf(bK = 1, 10, 0)
+        ' a lone entry is cut short ("Flex...") instead of wrapping, which the
+        ' wrap check can't see: never pull in past most of its estimated width
+        If bW * 0.96 < estE * 0.9 + padW Then Exit For
         ch.Legend.Width = bW * 0.96
         If bC Mod 2 = 0 Then ch.Legend.Left = pL + pW - insX - bW * 0.96
         ch.Refresh
@@ -1160,7 +1163,7 @@ End Function
 ' The logo picture LOGO_DIR\<name>.png / .jpg / .jpeg / .gif / .bmp, put in the
 ' chart LOGO_W wide (its own proportions). Nothing if no such file.
 Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
-    Dim ext As Variant, f As String
+    Dim ext As Variant, f As String, img As Object, asp As Double
     For Each ext In Array(".png", ".jpg", ".jpeg", ".gif", ".bmp")
         If Len(Dir(LOGO_DIR & "\" & nm & ext)) > 0 Then f = LOGO_DIR & "\" & nm & ext: Exit For
     Next ext
@@ -1171,8 +1174,21 @@ Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
     On Error Resume Next
     Set AddLogo = ch.Shapes.AddPicture(f, msoFalse, msoTrue, 0, 0, -1, -1)
     If AddLogo Is Nothing Then Exit Function
-    AddLogo.LockAspectRatio = msoTrue
+    ' the picture's own proportions: read from the file (WIA knows PNG / JPG
+    ' sizes), else from the inserted size; then set both sides, as Excel can
+    ' stretch a picture in a chart when only one side is set
+    asp = 0
+    Set img = CreateObject("WIA.ImageFile")
+    If Not img Is Nothing Then
+        img.LoadFile f
+        If img.Width > 0 Then asp = img.Height / img.Width
+    End If
+    If asp <= 0 And AddLogo.Width > 0 Then asp = AddLogo.Height / AddLogo.Width
+    If asp <= 0 Then asp = 0.6
+    AddLogo.LockAspectRatio = msoFalse
     AddLogo.Width = LOGO_W
+    AddLogo.Height = LOGO_W * asp
+    AddLogo.LockAspectRatio = msoTrue
     AddLogo.Name = "Logo"
 End Function
 
