@@ -419,31 +419,43 @@ End Sub
 ' through it: move each one up to sit just above its error bar instead.
 Private Sub LiftBarLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow() As Long, _
                           rc() As Long, ByVal valC As Long, ByVal errC As Long, lblC() As Long)
-    Dim j As Long, i As Long, v As Variant, e As Variant
-    Dim yLo As Double, yHi As Double, pT As Double, pH As Double, yTop As Double
+    Dim j As Long, i As Long, v As Variant, e As Variant, pass As Long
+    Dim yLo As Double, yHi As Double, pT As Double, pH As Double, yTop As Double, hL As Double
     On Error Resume Next
-    ch.Refresh
-    DoEvents
-    yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
-    pT = ch.PlotArea.InsideTop: pH = ch.PlotArea.InsideHeight
-    If yHi <= yLo Or pH <= 0 Then Exit Sub
-    For j = 1 To n
-        If lblC(j) > 0 And lblC(j) <> errC Then
-            For i = 1 To rc(j)
-                v = tws.Cells(blkRow(j) + i - 1, valC).Value
-                e = tws.Cells(blkRow(j) + i - 1, errC).Value
-                If IsNum(v) And IsNum(e) Then
-                    If ch.SeriesCollection(j).Points(i).HasDataLabel Then
-                        yTop = pT + (1 - (CDbl(v) + Abs(CDbl(e)) - yLo) / (yHi - yLo)) * pH
-                        With ch.SeriesCollection(j).Points(i).DataLabel
-                            .Position = xlLabelPositionOutsideEnd   ' back to the bar top first
-                            If .Top + .Height > yTop - 1 Then .Top = yTop - .Height - 1
-                        End With
+    ' pass 1 puts every label back on its bar top; Excel only lays them out
+    ' again on a redraw, so pass 2 reads them after one and places each with
+    ' its bottom just above the top of its error bar
+    For pass = 1 To 2
+        ch.Refresh
+        DoEvents
+        yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
+        pT = ch.PlotArea.InsideTop: pH = ch.PlotArea.InsideHeight
+        If yHi <= yLo Or pH <= 0 Then Exit Sub
+        For j = 1 To n
+            If lblC(j) > 0 And lblC(j) <> errC Then
+                For i = 1 To rc(j)
+                    v = tws.Cells(blkRow(j) + i - 1, valC).Value
+                    e = tws.Cells(blkRow(j) + i - 1, errC).Value
+                    If IsNum(v) And IsNum(e) Then
+                        If ch.SeriesCollection(j).Points(i).HasDataLabel Then
+                            With ch.SeriesCollection(j).Points(i).DataLabel
+                                If pass = 1 Then
+                                    .Position = xlLabelPositionOutsideEnd
+                                Else
+                                    yTop = pT + (1 - (CDbl(v) + Abs(CDbl(e)) - yLo) / (yHi - yLo)) * pH
+                                    ' an upright label is as tall as its text is long, whichever
+                                    ' way round Excel reports its size
+                                    hL = .Height
+                                    If .Orientation = xlUpward And .Width > hL Then hL = .Width
+                                    .Top = yTop - hL - 2
+                                End If
+                            End With
+                        End If
                     End If
-                End If
-            Next i
-        End If
-    Next j
+                Next i
+            End If
+        Next j
+    Next pass
 End Sub
 
 
