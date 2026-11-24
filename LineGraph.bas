@@ -542,7 +542,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     On Error GoTo 0
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H, topShift   ' last, once nothing else will move
-    If Not logoShp Is Nothing Then AnchorLogo ch, logoShp, logoCorner, H
+    If Not logoShp Is Nothing Then AnchorLogo ch, logoShp, logoCorner, H, logoW, logoH
     If DO_LABELS And lblPos = LP_UPRIGHT Then RaiseLabels ch, nBlk, lblC, msz
     If DO_LABELS And lblPos = LP_AUTO Then _
         ArrangeLabels ch, tws, nBlk, blkRow, rc, xC, yC, lblC, msz, useLine, xLog, yLog
@@ -1664,9 +1664,16 @@ End Function
 
 ' Puts the logo in its corner of the plot box as finally drawn (inset like
 ' the legend), or above the plot at its left edge (corner 5).
-Private Sub AnchorLogo(ch As Chart, shp As Shape, ByVal corner As Long, ByVal H As Double)
+Private Sub AnchorLogo(ch As Chart, shp As Shape, ByVal corner As Long, ByVal H As Double, _
+                       ByVal lgW As Double, ByVal lgH As Double)
     Dim insX As Double, insY As Double
     On Error Resume Next
+    ' shapes in a chart stretch with it when the chart is resized (as for an
+    ' outside legend), so the logo gets its own size back first
+    shp.LockAspectRatio = msoFalse
+    shp.Width = lgW
+    shp.Height = lgH
+    shp.LockAspectRatio = msoTrue
     insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * BaseW()
     insY = (LG_TOP - PA_TOP) * H
     With ch.PlotArea

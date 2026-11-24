@@ -436,7 +436,7 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
 
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H, topShift   ' last, once nothing else will move
-    If Not logoShp Is Nothing Then AnchorLogo ch, logoShp, logoCorner, legCorner, H
+    If Not logoShp Is Nothing Then AnchorLogo ch, logoShp, logoCorner, legCorner, H, logoW, logoH
     LiftBarLabels ch, tws, nBlk, blkRow, rc, valC, errC, lblC   ' just above the error bars
     ch.Refresh                               ' draw the final layout now
     nextTop = co.Top + co.Height + 12
@@ -1227,9 +1227,15 @@ End Function
 ' the legend), or above the plot at its left edge (corner 5); a legend also
 ' above is kept to the logo's right.
 Private Sub AnchorLogo(ch As Chart, shp As Shape, ByVal corner As Long, ByVal legCorner As Long, _
-                       ByVal H As Double)
+                       ByVal H As Double, ByVal lgW As Double, ByVal lgH As Double)
     Dim insX As Double, insY As Double
     On Error Resume Next
+    ' shapes in a chart stretch with it when the chart is resized (as for an
+    ' outside legend), so the logo gets its own size back first
+    shp.LockAspectRatio = msoFalse
+    shp.Width = lgW
+    shp.Height = lgH
+    shp.LockAspectRatio = msoTrue
     insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * BaseW()
     insY = (LG_TOP - PA_TOP) * H
     With ch.PlotArea
