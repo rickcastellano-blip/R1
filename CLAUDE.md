@@ -35,9 +35,9 @@ Read README.md first: it maps every button to its macro, Excel module, file and 
 - Excel module names equal file names (BarGraph, LineGraph, RCPTImport, RCPTRecovered,
   NTBuild492, NTBuild492Recovered); keep the button macro names stable so existing button assignments work.
 - Graph settings are fixed cells on the Buttons sheet (no header search, by the user's
-  choice): Bar Graph colour scheme G3, label direction H3, label font size I3, width J3, legend overflow K3, legend off L3; Line Graph Line F7, Color scheme G7, Marker Size H7,
-  Line Width I7, Label Position J7, Label font size K7, Width L7. If the user moves them, update the constants.
-  Both graphs export a PNG of each chart to the fixed folder `FIG_DIR` (user's choice).
+  choice): Bar Graph colour scheme G3, label direction H3, label font size I3, width J3, legend overflow K3, legend off L3, logo position M3; Line Graph Line F7, Color scheme G7, Marker Size H7,
+  Line Width I7, Label Position J7, Label font size K7, Width L7, logo position M7. If the user moves them, update the constants.
+  Both graphs export a PNG of each chart to the fixed folder `FIG_DIR` (user's choice), and take logos from the fixed folder `LOGO_DIR`.
 - Numbers written into worksheet formulas go through `Num()` (locale-safe decimal point).
 
 ## Domain notes

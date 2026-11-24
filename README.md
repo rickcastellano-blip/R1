@@ -63,12 +63,19 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   | I7 | Line Width: points (0.25–10), line and marker outline; blank = default |
   | J7 | Label Position: right (default), above, below, left, in (centred on the point), or upper right |
   | K7 | Label font size: points (4–72); blank = 10 |
+  | M7 | Logo position: auto (default), upper left, upper right, lower left, lower right, above |
   | L7 | Width: figure width in inches (1–20); blank = 5. Only the plot widens: height, text, lines and the left/right margins stay fixed |
 
 - The legend goes in a corner where it covers no data (1 or 2 columns, raising the axes a
   step if needed), or outside the plot on the right when nothing fits.
 - Point labels are kept inside the plot and off the legend (axes widened a step at a time).
 - Both graphs: no fill behind the figure, white behind the axes.
+- Logos (both graphs): a `logo` tag in the graph tag's column, below the tag (before the next
+  graph tag), with the logo's name in the cell to its left, e.g. `CHASM | logo`. The picture
+  `<name>.png/.jpg` comes from the fixed `LOGO_DIR` (Logos\External), 1.5 in wide. Position:
+  Buttons!M3 (bar) / M7 (line): `auto` takes the clearest inside corner (upper left first),
+  a named corner is used as given, `above` puts it over the plot; the legend never shares its
+  corner and the axis is raised (within 2x) so data stays clear of it.
 - Both graphs save a PNG of every chart (`<sheet> <chart name>.png`) to the fixed folder
   `FIG_DIR` at the top of each module (the team's OneDrive `General\Fig Pix`), at screen resolution.
 
@@ -81,7 +88,7 @@ block; `#N/A` stays in it as a group with no bar. The series name is in the colu
 the tag, on the block's first row. The column right of the values holds ± errors; bar labels
 (data tags) are text in that column (then no error bars), or whatever is in the next
 column (text or numbers, shown as displayed), drawn above the error bars. Header tags `errorbar` and `note` in the row below the tag
-(right of the values) pick those columns instead, as in the Line Graph. **Buttons!H3** sets their direction: `horiz` (default) or `vert`; **Buttons!I3** their font size in points (blank = 10). **Buttons!L3** = `off` draws no legend. **Buttons!K3** says where a legend that fits no corner goes: `right` (default; the chart
+(right of the values) pick those columns instead, as in the Line Graph. **Buttons!H3** sets their direction: `horiz` (default) or `vert`; **Buttons!I3** their font size in points (blank = 10). **Buttons!L3** = `off` draws no legend. **Buttons!M3** places the logo (as M7 for the Line Graph). **Buttons!K3** says where a legend that fits no corner goes: `right` (default; the chart
 widens) or `above` (the chart grows taller and the plot moves down). `force right` / `force above` put the legend there
 always, without trying the corners. **Buttons!J3** sets the figure width in inches (blank = 5); only the
 plot widens (height, text, lines and the left/right margins stay fixed). An empty column stops the search. The colour scheme is

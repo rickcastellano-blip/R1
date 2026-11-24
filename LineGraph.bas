@@ -33,6 +33,11 @@ Private Const LINEW_CELL     As String = "I7"     ' line + marker outline width 
 Private Const LBLPOS_CELL    As String = "J7"     ' point labels: right, above, below, left, in or upper right
 Private Const LP_UPRIGHT     As Long = 9001       ' "upper right": not an Excel position; Right, then moved up
 Private Const LBLFS_CELL     As String = "K7"     ' point-label font size in pt; blank = LABEL_FS
+Private Const LOGOPOS_CELL   As String = "M7"     ' logo: auto, upper left/right, lower left/right, above
+Private Const LOGO_DIR       As String = _
+    "C:\Users\rcastellano\OneDrive - Chasm Advanced Materials\Performance Additives Team\Logos\External"
+Private Const LOGO_W         As Double = 108      ' logo width (pt); height keeps the picture's shape
+Private Const LG_GAP_ABOVE   As Double = 6        ' gap between a logo above the plot and the plot (pt)
 ' =========================================================
 Sub GenerateLineGraph()
     Dim src As Range, tws As Worksheet, scope As Range, ur As Range
@@ -110,6 +115,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim lblC() As Long, fsTx As Double, legCorner As Long, legExtraW As Double, legExtraH As Double
     Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
     Dim lblPos As Long, lblFs As Double
+    Dim logoName As String, logoShp As Shape, logoW As Double, logoH As Double
+    Dim logoCorner As Long, topBand As Double, topShift As Double, lgCel As Range
 
     Dim nBlank As Long, useHdr As Boolean, hE As Long, hX As Long, hN As Long
 
@@ -122,6 +129,18 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
 
     xC = tagC: yC = tagC + 1: e1C = tagC + 2: e2C = tagC + 3: nameC = tagC - 1
     If nameC < 1 Then MsgBox "The 'graph' tag needs a legend column to its left.", vbExclamation: Exit Sub
+
+    ' a "logo" tag in the tag's column, below it and before the next graph
+    ' tag there, names the logo in the cell to its left
+    For Each lgCel In Application.Intersect(scope, tws.Columns(xC)).Cells
+        If lgCel.Row > tagR Then
+            If IsTag(lgCel.Value) Then Exit For
+            If LCase$(CellText(lgCel.Value)) = "logo" Then
+                logoName = CellText(tws.Cells(lgCel.Row, nameC).Value)
+                Exit For
+            End If
+        End If
+    Next lgCel
 
     ' axis labels live one row below the tag (xgrapher: xdata{i+1,j}, xdata{i+1,j+1})
     b = tws.Cells(tagR + 1, xC).Value
@@ -489,14 +508,20 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
 
     ' pick the corner / column count that covers no data, raising the axis
     ' maxima if no corner is clear (falls back to top-right on any error)
+    If Len(logoName) > 0 Then
+        Set logoShp = AddLogo(ch, logoName)
+        If Not logoShp Is Nothing Then logoW = logoShp.Width: logoH = logoShp.Height
+    End If
     PlaceLegend ch, tws, W, H, nBlk, fsL * LG_LINESP, msz, fsTx, useLine, xLog, yLog, _
-                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC, lblPos, legCorner, legExtraW, legExtraH
+                blkRow, rc, xC, yC, IIf(hasE1, e1C, 0), lblC, lblPos, _
+                logoW, logoH, ReadLogoPos(), logoCorner, topBand, legCorner, legExtraW, legExtraH
+    topShift = Px(topBand)                       ' logo above: plot moves down
 
     On Error Resume Next
     For p = 1 To 2
         With ch.PlotArea
             .InsideLeft = Px(PA_LEFT * BaseW())
-            .InsideTop = Px(PA_TOP * H)
+            .InsideTop = Px(PA_TOP * H) + topShift
             .InsideWidth = Px(W - (1 - PA_WIDTH) * BaseW())
             .InsideHeight = Px(PA_HEIGHT * H)
         End With
@@ -509,7 +534,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     ch.SetElement msoElementChartTitleNone
     On Error GoTo 0
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
-    AnchorLegend ch, legCorner, W, H         ' last, once nothing else will move
+    AnchorLegend ch, legCorner, W, H, topShift   ' last, once nothing else will move
+    If Not logoShp Is Nothing Then AnchorLogo ch, logoShp, logoCorner, H
     If DO_LABELS And lblPos = LP_UPRIGHT Then RaiseLabels ch, nBlk, lblC, msz
     ch.Refresh                               ' draw the final layout now
     SaveFigure co                            ' PNG copy in FIG_DIR
@@ -848,7 +874,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                         ByVal xLog As Boolean, ByVal yLog As Boolean, _
                         blkRow() As Long, rc() As Long, ByVal xC As Long, ByVal yC As Long, _
                         ByVal eC As Long, lblC() As Long, ByVal lblPos As Long, _
-                        ByRef legCorner As Long, _
+                        ByVal logoW As Double, ByVal logoH As Double, ByVal logoPos As String, _
+                        ByRef logoCorner As Long, ByRef topBand As Double, ByRef legCorner As Long, _
                         ByRef extraW As Double, ByRef extraH As Double)
     Dim oX() As Double, oY() As Double, offL() As Double, offT() As Double
     Dim offR() As Double, offB() As Double, nO As Long
@@ -867,7 +894,9 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     Dim bSc As Long, bHits As Long, bW As Double, bH As Double, bX As Double, bY As Double
     Dim fSc As Long, fHits As Long, fW As Double, fH As Double, fX As Double, fY As Double
 
+    Dim lgRank As Variant, cNames As Variant, yStart As Double
     On Error GoTo Done
+    logoCorner = -1: topBand = 0
 
     ' obstacles: point boxes (data anchor + point offsets) and line segments
     For j = 1 To n: tot = tot + rc(j): Next j
@@ -1056,6 +1085,47 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
         If ch.Axes(xlCategory).MinimumScale = xLo And ch.Axes(xlCategory).MaximumScale = xHi And _
            ch.Axes(xlValue).MinimumScale = yLo And ch.Axes(xlValue).MaximumScale = yHi Then Exit For
     Next lr
+
+    ' the logo next: "above" puts it over the plot (the chart grows taller);
+    ' a named corner is used as given, "auto" takes the clearest corner
+    ' (upper left first). For an upper corner the Y maximum is raised a step
+    ' at a time (linear axis, within LG_MAX_GROW) until no data runs under it.
+    If logoW > 0 Then
+        If logoPos = "above" Then
+            logoCorner = 5
+            topBand = LG_GAP_ABOVE + logoH + LG_GAP_ABOVE
+        Else
+            cNames = Array("upper right", "upper left", "lower right", "lower left")
+            lgRank = Array(1, 0, 3, 2)
+            yStart = ch.Axes(xlValue).MaximumScale
+            yLo0 = ch.Axes(xlValue).MinimumScale
+            For iter = 0 To 40
+                xLo = ch.Axes(xlCategory).MinimumScale: xHi = ch.Axes(xlCategory).MaximumScale
+                yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
+                bSc = 2147483647
+                For corner = 0 To 3
+                    If logoPos = "auto" Or logoPos = cNames(corner) Then
+                        If corner Mod 2 = 0 Then lx = pL + pW - insX - logoW Else lx = pL + insX
+                        If corner < 2 Then ly = pT + insY Else ly = pT + pH - insY - logoH
+                        hits = LegendHits(lx, ly, logoW, logoH, nO, oX, oY, offL, offT, offR, offB, _
+                                          nS, sX1, sY1, sX2, sY2, xLo, xHi, yLo, yHi, _
+                                          xLog, yLog, pL, pT, pW, pH)
+                        If hits * 1000 + lgRank(corner) < bSc Then
+                            bSc = hits * 1000 + lgRank(corner): bHits = hits: logoCorner = corner
+                        End If
+                    End If
+                Next corner
+                If bHits = 0 Or yLog Or Left$(logoPos, 5) = "lower" Then Exit For
+                With ch.Axes(xlValue)
+                    If yHi + .MajorUnit - yLo > LG_MAX_GROW * (yStart - yLo0) + .MajorUnit / 1000 Then Exit For
+                    .MaximumScale = yHi + .MajorUnit
+                End With
+            Next iter
+            If bHits > 0 Then ch.Axes(xlValue).MaximumScale = yStart    ' no clear spot: don't stretch for it
+        End If
+    End If
+    extraH = topBand
+
     xHi0 = ch.Axes(xlCategory).MaximumScale
     yHi0 = ch.Axes(xlValue).MaximumScale
 
@@ -1078,6 +1148,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
                     hits = LegendHits(lx, ly, lw, lh, nO, oX, oY, offL, offT, offR, offB, _
                                       nS, sX1, sY1, sX2, sY2, xLo, xHi, yLo, yHi, _
                                       xLog, yLog, pL, pT, pW, pH)
+                    If corner = logoCorner Then hits = 999   ' the logo's corner
                     sc = hits * 1000 + (k - 1) * 4 + corner
                     If sc < bSc Then
                         bSc = sc: bHits = hits: bK = k: bC = corner: bW = lw: bH = lh: bX = lx: bY = ly
@@ -1176,7 +1247,8 @@ Outside:
     lw = 30 + maxLen * fs * 0.52
     lh = n * fs * LG_LINESP + 12              ' a full line per entry, plus box padding
     extraW = lw + 24
-    If pT + lh + 8 > H Then extraH = pT + lh + 8 - H
+    extraH = topBand
+    If pT + lh + 8 > H Then extraH = topBand + pT + lh + 8 - H
 
     ' widen the chart FIRST: Excel caps a legend's width to the chart it is
     ' in, which wrapped long names and left the widened chart half empty
@@ -1184,7 +1256,7 @@ Outside:
     ch.Parent.Height = H + extraH
     For j = 1 To 2
         With ch.PlotArea
-            .InsideLeft = pL: .InsideTop = pT: .InsideWidth = pW: .InsideHeight = pH
+            .InsideLeft = pL: .InsideTop = pT + Px(topBand): .InsideWidth = pW: .InsideHeight = pH
         End With
     Next j
     With ch.Legend
@@ -1335,11 +1407,66 @@ Private Sub RaiseLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal msz 
     Next j
 End Sub
 
+' Logo position from Buttons!M7: auto (also blank / anything else), upper
+' left, upper right, lower left, lower right or above.
+Private Function ReadLogoPos() As String
+    Dim ws As Worksheet, v As String
+    ReadLogoPos = "auto"
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    v = LCase$(CellText(ws.Range(LOGOPOS_CELL).Value))
+    Select Case v
+        Case "upper left", "upper right", "lower left", "lower right", "above": ReadLogoPos = v
+    End Select
+End Function
+
+' The logo picture LOGO_DIR\<name>.png / .jpg / .jpeg / .gif / .bmp, put in the
+' chart LOGO_W wide (its own proportions). Nothing if no such file.
+Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
+    Dim ext As Variant, f As String
+    For Each ext In Array(".png", ".jpg", ".jpeg", ".gif", ".bmp")
+        If Len(Dir(LOGO_DIR & "\" & nm & ext)) > 0 Then f = LOGO_DIR & "\" & nm & ext: Exit For
+    Next ext
+    If Len(f) = 0 Then
+        MsgBox "No logo file named '" & nm & "' (.png / .jpg) in" & vbCrLf & LOGO_DIR, vbExclamation
+        Exit Function
+    End If
+    On Error Resume Next
+    Set AddLogo = ch.Shapes.AddPicture(f, msoFalse, msoTrue, 0, 0, -1, -1)
+    If AddLogo Is Nothing Then Exit Function
+    AddLogo.LockAspectRatio = msoTrue
+    AddLogo.Width = LOGO_W
+    AddLogo.Name = "Logo"
+End Function
+
+' Puts the logo in its corner of the plot box as finally drawn (inset like
+' the legend), or above the plot at its left edge (corner 5).
+Private Sub AnchorLogo(ch As Chart, shp As Shape, ByVal corner As Long, ByVal H As Double)
+    Dim insX As Double, insY As Double
+    On Error Resume Next
+    insX = (PA_LEFT + PA_WIDTH - LG_RIGHT) * BaseW()
+    insY = (LG_TOP - PA_TOP) * H
+    With ch.PlotArea
+        If corner = 5 Then
+            shp.Left = .InsideLeft
+            shp.Top = .InsideTop - shp.Height - LG_GAP_ABOVE
+        ElseIf corner >= 0 Then
+            If corner Mod 2 = 0 Then shp.Left = .InsideLeft + .InsideWidth - insX - shp.Width _
+                                Else shp.Left = .InsideLeft + insX
+            If corner < 2 Then shp.Top = .InsideTop + insY _
+                          Else shp.Top = .InsideTop + .InsideHeight - insY - shp.Height
+        End If
+    End With
+End Sub
+
 ' Align the legend to its corner of the plot box as finally drawn, using the
 ' size Excel actually gave it (a horizontal legend can come out wider than
 ' asked, which left it hanging past the plot's right edge).
 ' corner: 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left, 4 outside right.
-Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, ByVal H As Double)
+Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, ByVal H As Double, _
+                         Optional ByVal topShift As Double = 0)
     Dim insX As Double, insY As Double, p As Long
     On Error Resume Next
     ch.Refresh
@@ -1352,12 +1479,12 @@ Private Sub AnchorLegend(ch As Chart, ByVal corner As Long, ByVal W As Double, B
     For p = 1 To 4
         With ch.PlotArea
             .InsideLeft = Px(PA_LEFT * BaseW())
-            .InsideTop = Px(PA_TOP * H)
+            .InsideTop = Px(PA_TOP * H) + topShift
             .InsideWidth = Px(W - (1 - PA_WIDTH) * BaseW())
             .InsideHeight = Px(PA_HEIGHT * H)
         End With
         If Abs(ch.PlotArea.InsideLeft - Px(PA_LEFT * BaseW())) < 0.4 And _
-           Abs(ch.PlotArea.InsideTop - Px(PA_TOP * H)) < 0.4 And _
+           Abs(ch.PlotArea.InsideTop - Px(PA_TOP * H) - topShift) < 0.4 And _
            Abs(ch.PlotArea.InsideWidth - Px(W - (1 - PA_WIDTH) * BaseW())) < 0.4 And _
            Abs(ch.PlotArea.InsideHeight - Px(PA_HEIGHT * H)) < 0.4 Then Exit For
     Next p
