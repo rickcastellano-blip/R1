@@ -71,8 +71,8 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   step if needed), or outside the plot on the right when nothing fits.
 - Point labels are kept inside the plot and off the legend (axes widened a step at a time).
 - Both graphs: no fill behind the figure, white behind the axes.
-- Logos (both graphs): a `logo` tag in the graph tag's column, below the tag (before the next
-  graph tag), with the logo's name in the cell to its left, e.g. `CHASM | logo`. The picture
+- Logos (both graphs): a `logo` tag in the graph tag's column, below the tag with at most one
+  fully empty row (name column to last header column) between it and the graph's rows, with the logo's name in the cell to its left, e.g. `CHASM | logo`. The picture
   `<name>.png/.jpg` comes from the fixed `LOGO_DIR` (Logos\External), as wide as Buttons!N3 (bar) / N7 (line) in
   inches (blank = 1.25 in). Position:
   Buttons!M3 (bar) / M7 (line): `auto` takes the clearest inside corner (upper left first),

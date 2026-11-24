@@ -123,7 +123,7 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     Dim useLine As Boolean, scheme As String, clr() As Long, mSet As Double, lwSet As Double
     Dim lblPos As Long, lblFs As Double
     Dim logoName As String, logoShp As Shape, logoW As Double, logoH As Double
-    Dim logoCorner As Long, topBand As Double, topShift As Double, lgCel As Range
+    Dim logoCorner As Long, topBand As Double, topShift As Double
 
     Dim nBlank As Long, useHdr As Boolean, hE As Long, hX As Long, hN As Long
 
@@ -137,17 +137,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     xC = tagC: yC = tagC + 1: e1C = tagC + 2: e2C = tagC + 3: nameC = tagC - 1
     If nameC < 1 Then MsgBox "The 'graph' tag needs a legend column to its left.", vbExclamation: Exit Sub
 
-    ' a "logo" tag in the tag's column, below it and before the next graph
-    ' tag there, names the logo in the cell to its left
-    For Each lgCel In Application.Intersect(scope, tws.Columns(xC)).Cells
-        If lgCel.Row > tagR Then
-            If IsTag(lgCel.Value) Then Exit For
-            If LCase$(CellText(lgCel.Value)) = "logo" Then
-                logoName = CellText(tws.Cells(lgCel.Row, nameC).Value)
-                Exit For
-            End If
-        End If
-    Next lgCel
+    ' a "logo" tag in the tag's column names the logo in the cell to its left
+    logoName = FindLogoName(tws, tagR, xC, scope.Row + scope.Rows.Count)
 
     ' axis labels live one row below the tag (xgrapher: xdata{i+1,j}, xdata{i+1,j+1})
     b = tws.Cells(tagR + 1, xC).Value
@@ -1614,6 +1605,33 @@ Private Function Overlap(ByVal aL As Double, ByVal aT As Double, ByVal aR As Dou
     w = Application.Min(aR, bR) - Application.Max(aL, bL)
     h = Application.Min(aB, bB) - Application.Max(aT, bT)
     If w > 0 And h > 0 Then Overlap = w * h
+End Function
+
+' The logo named next to a "logo" tag in column tagC below the graph tag.
+' The search walks down from the header row and gives up at two rows in a row
+' that are completely empty from the name column (one left of the tag) to the
+' last header column, at another graph tag, or at row stopR; so a logo tag
+' belongs to the graph above it only with at most one empty row between.
+Private Function FindLogoName(ws As Worksheet, ByVal tagR As Long, ByVal tagC As Long, _
+                              ByVal stopR As Long) As String
+    Dim hdrR As Long, lastC As Long, r As Long, nBlank As Long, t As String
+    If tagC < 2 Then Exit Function
+    hdrR = tagR + 1
+    lastC = tagC
+    Do While Len(CellText(ws.Cells(hdrR, lastC + 1).Value)) > 0 And lastC < tagC + 40
+        lastC = lastC + 1
+    Loop
+    For r = hdrR + 1 To stopR - 1
+        If Application.CountA(ws.Range(ws.Cells(r, tagC - 1), ws.Cells(r, lastC))) = 0 Then
+            nBlank = nBlank + 1
+            If nBlank >= 2 Then Exit Function
+        Else
+            nBlank = 0
+            t = LCase$(CellText(ws.Cells(r, tagC).Value))
+            If t = "logo" Then FindLogoName = CellText(ws.Cells(r, tagC - 1).Value): Exit Function
+            If t = "bargraph" Or Left$(t, 5) = "graph" Then Exit Function
+        End If
+    Next r
 End Function
 
 ' Logo position from Buttons!M7: auto (also blank / anything else), upper

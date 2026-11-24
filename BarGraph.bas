@@ -112,13 +112,7 @@ Private Sub BuildBarGraph(src As Range, tws As Worksheet, scope As Range, ur As 
             If LCase$(CellText(cel.Value)) = "bargraph" Then stopR = cel.Row
         End If
     Next cel
-    For Each cel In Application.Intersect(scope, tws.Columns(tagC)).Cells   ' its logo tag
-        If cel.Row > tagR And cel.Row < stopR And tagC > 1 Then
-            If LCase$(CellText(cel.Value)) = "logo" And Len(logoName) = 0 Then
-                logoName = CellText(tws.Cells(cel.Row, tagC - 1).Value)
-            End If
-        End If
-    Next cel
+    logoName = FindLogoName(tws, tagR, tagC, stopR)   ' its logo tag
     For Each cel In scope.Cells                     ' its xlabels tag
         If cel.Row > tagR And cel.Row < stopR Then
             If LCase$(CellText(cel.Value)) = "xlabels" Then
@@ -1168,6 +1162,33 @@ Private Function ReadLegendForced() As Boolean
     On Error GoTo 0
     If ws Is Nothing Then Exit Function
     ReadLegendForced = (Left$(LCase$(CellText(ws.Range(LEGOVER_CELL).Value)), 6) = "force ")
+End Function
+
+' The logo named next to a "logo" tag in column tagC below the graph tag.
+' The search walks down from the header row and gives up at two rows in a row
+' that are completely empty from the name column (one left of the tag) to the
+' last header column, at another graph tag, or at row stopR; so a logo tag
+' belongs to the graph above it only with at most one empty row between.
+Private Function FindLogoName(ws As Worksheet, ByVal tagR As Long, ByVal tagC As Long, _
+                              ByVal stopR As Long) As String
+    Dim hdrR As Long, lastC As Long, r As Long, nBlank As Long, t As String
+    If tagC < 2 Then Exit Function
+    hdrR = tagR + 1
+    lastC = tagC
+    Do While Len(CellText(ws.Cells(hdrR, lastC + 1).Value)) > 0 And lastC < tagC + 40
+        lastC = lastC + 1
+    Loop
+    For r = hdrR + 1 To stopR - 1
+        If Application.CountA(ws.Range(ws.Cells(r, tagC - 1), ws.Cells(r, lastC))) = 0 Then
+            nBlank = nBlank + 1
+            If nBlank >= 2 Then Exit Function
+        Else
+            nBlank = 0
+            t = LCase$(CellText(ws.Cells(r, tagC).Value))
+            If t = "logo" Then FindLogoName = CellText(ws.Cells(r, tagC - 1).Value): Exit Function
+            If t = "bargraph" Or Left$(t, 5) = "graph" Then Exit Function
+        End If
+    Next r
 End Function
 
 ' Logo position from Buttons!M3: auto (also blank / anything else), upper
