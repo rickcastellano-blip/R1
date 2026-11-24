@@ -43,6 +43,11 @@ Sub GenerateStrengthBarGraph()
 
     '--- pick the range (you can switch workbooks in this dialog) ----------
     On Error Resume Next
+    ' clicked from XMaster: bring the most recently used other workbook window
+    ' to the front, so the data is there to select
+    If ActiveWorkbook Is ThisWorkbook And Application.Windows.Count > 1 Then
+        ActiveWindow.ActivateNext
+    End If
     Set src = Application.InputBox( _
         Prompt:="Switch to the workbook you want, then select/drag the data block." & vbCrLf & _
                 "Every 'bargraph' tag in the selection makes its own chart.", _
