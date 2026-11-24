@@ -43,7 +43,9 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 
 - The tag cell is the X column; Y is the next column; the series name is in the column left
   of X, on the series' first row. Axis titles are the row below the tag (linked to the cells).
-- A row where X **and** Y are both blank starts a new series; two such rows end the graph.
+- A row where X **and** Y are both blank starts a new series. The graph ends at two rows in a
+  row that are completely empty from the name column to the last header column (the same rule
+  for the Bar Graph, and for finding a `logo` tag).
   A row with one value or `#N/A` stays in the series with no point.
 - Column-header tags (in the row below the tag, right of Y): `errorbar` = ±Y errors,
   `errorbarx` = ±X errors, `note` = point labels. If any is present only those columns are
