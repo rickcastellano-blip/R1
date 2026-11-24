@@ -740,8 +740,8 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     Dim estE As Double, nmLen As Long, wq As Long, hLo As Double, hHi As Double, hOne As Double
     For i = 1 To n
         nmLen = Len(ch.SeriesCollection(i).Name)
-        If (lineH / LG_LINESP) * (1.6 + 0.52 * nmLen) > estE Then _
-            estE = (lineH / LG_LINESP) * (1.6 + 0.52 * nmLen)
+        If (lineH / LG_LINESP) * (1.6 + 0.56 * nmLen) > estE Then _
+            estE = (lineH / LG_LINESP) * (1.6 + 0.56 * nmLen)
     Next i
     If eW < estE Then eW = estE
 
@@ -892,7 +892,7 @@ Private Sub PlaceBarLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByV
     Next wq
     ' then pull a one-column legend in 4 % at a time while no name wraps, for
     ' a snug box (a 2-column one would reflow into one column instead)
-    For wq = 1 To IIf(bK = 1, 10, 0)
+    For wq = 1 To IIf(bK = 1 And n > 1, 10, 0)   ' (a lone entry is cut short, not wrapped)
         ' a lone entry is cut short ("Flex...") instead of wrapping, which the
         ' wrap check can't see: never pull in past most of its estimated width
         If bW * 0.96 < estE * 0.9 + padW Then Exit For

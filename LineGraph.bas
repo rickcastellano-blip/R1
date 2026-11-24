@@ -536,7 +536,8 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H, topShift   ' last, once nothing else will move
     If Not logoShp Is Nothing Then AnchorLogo ch, logoShp, logoCorner, H
-    If DO_LABELS And lblPos = LP_UPRIGHT Then RaiseLabels ch, nBlk, lblC, msz
+    If DO_LABELS And lblPos <> xlLabelPositionCenter Then _
+        ArrangeLabels ch, tws, nBlk, blkRow, rc, xC, yC, lblC, lblPos, msz, useLine, xLog, yLog
     ch.Refresh                               ' draw the final layout now
     SaveFigure co                            ' PNG copy in FIG_DIR
 End Sub
@@ -995,8 +996,8 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     Dim estE As Double, nmLen As Long, wq As Long, hLo As Double, hHi As Double, hOne As Double
     For i = 1 To n
         nmLen = Len(ch.SeriesCollection(i).Name)
-        If (lineH / LG_LINESP) * (1.6 + 0.52 * nmLen) > estE Then _
-            estE = (lineH / LG_LINESP) * (1.6 + 0.52 * nmLen)
+        If (lineH / LG_LINESP) * (1.6 + 0.56 * nmLen) > estE Then _
+            estE = (lineH / LG_LINESP) * (1.6 + 0.56 * nmLen)
     Next i
     If eW < estE Then eW = estE
 
@@ -1207,7 +1208,7 @@ Private Sub PlaceLegend(ch As Chart, tws As Worksheet, ByVal W As Double, ByVal 
     Next wq
     ' then pull a one-column legend in 4 % at a time while no name wraps, for
     ' a snug box (a 2-column one would reflow into one column instead)
-    For wq = 1 To IIf(bK = 1, 10, 0)
+    For wq = 1 To IIf(bK = 1 And n > 1, 10, 0)   ' (a lone entry is cut short, not wrapped)
         ' a lone entry is cut short ("Flex...") instead of wrapping, which the
         ' wrap check can't see: never pull in past most of its estimated width
         If bW * 0.96 < estE * 0.9 + padW Then Exit For
@@ -1387,28 +1388,152 @@ Private Sub NiceRange(ByVal lo As Double, ByVal hi As Double, ByRef axMin As Dou
     axMin = Round(a, 12): axMax = Round(b, 12): axStep = Round(s, 12)
 End Sub
 
-' "upper right" point labels: Excel has no such position, so each label is
-' drawn to the right of its point and then moved up until its bottom sits
-' just above the point (its lower-left corner off the marker's upper right).
-Private Sub RaiseLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal msz As Double)
-    Dim j As Long, i As Long
+' Places every point label where it collides least: each label tries the
+' chosen position first, then upper right, right, upper left, above, lower
+' right, below, left and lower left of its point, and takes the first spot
+' that touches no other label, marker, connecting line, legend, logo or plot
+' edge (or, failing that, the spot that touches least). Labels are placed one
+' after another, each avoiding those already placed. Leader lines are turned
+' off, as every label now sits right next to its point.
+Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow() As Long, _
+                          rc() As Long, ByVal xC As Long, ByVal yC As Long, lblC() As Long, _
+                          ByVal lblPos As Long, ByVal msz As Double, ByVal useLine As Boolean, _
+                          ByVal xLog As Boolean, ByVal yLog As Boolean)
+    Dim pL As Double, pT As Double, pW As Double, pH As Double
+    Dim xLo As Double, xHi As Double, yLo As Double, yHi As Double
+    Dim ptX() As Double, ptY() As Double, ptS() As Long, nP As Long, tot As Long
+    Dim bxL() As Double, bxT() As Double, bxR() As Double, bxB() As Double, nBx As Long
+    Dim j As Long, i As Long, k As Long, m As Long, x As Variant, y As Variant
+    Dim ptx0 As Double, pty0 As Double, w As Double, h As Double, g As Double
+    Dim cand As Variant, cx As Double, cy As Double, sc As Double, bestSc As Double
+    Dim bestX As Double, bestY As Double, qx As Double, qy As Double, ov As Double
+    Dim dl As DataLabel, shp As Shape
+
     On Error Resume Next
     ch.Refresh
     DoEvents
+    pL = ch.PlotArea.InsideLeft: pT = ch.PlotArea.InsideTop
+    pW = ch.PlotArea.InsideWidth: pH = ch.PlotArea.InsideHeight
+    xLo = ch.Axes(xlCategory).MinimumScale: xHi = ch.Axes(xlCategory).MaximumScale
+    yLo = ch.Axes(xlValue).MinimumScale: yHi = ch.Axes(xlValue).MaximumScale
+    g = msz / 2 + 2
+
+    ' every point on screen, with its series (for the connecting lines)
+    For j = 1 To n: tot = tot + rc(j): Next j
+    If tot = 0 Then Exit Sub
+    ReDim ptX(1 To tot): ReDim ptY(1 To tot): ReDim ptS(1 To tot)
+    For j = 1 To n
+        For i = 0 To rc(j) - 1
+            x = tws.Cells(blkRow(j) + i, xC).Value: y = tws.Cells(blkRow(j) + i, yC).Value
+            If IsNum(x) And IsNum(y) Then
+                If MapV(CDbl(x), xLo, xHi, xLog, pL, pW, False, ptx0) And _
+                   MapV(CDbl(y), yLo, yHi, yLog, pT, pH, True, pty0) Then
+                    nP = nP + 1: ptX(nP) = ptx0: ptY(nP) = pty0: ptS(nP) = j
+                End If
+            End If
+        Next i
+    Next j
+
+    ' fixed obstacles: legend and logo; placed labels are added as we go
+    ReDim bxL(1 To tot + 2): ReDim bxT(1 To tot + 2): ReDim bxR(1 To tot + 2): ReDim bxB(1 To tot + 2)
+    If ch.HasLegend Then
+        nBx = nBx + 1
+        bxL(nBx) = ch.Legend.Left: bxT(nBx) = ch.Legend.Top
+        bxR(nBx) = bxL(nBx) + ch.Legend.Width: bxB(nBx) = bxT(nBx) + ch.Legend.Height
+    End If
+    Set shp = Nothing
+    Set shp = ch.Shapes("Logo")
+    If Not shp Is Nothing Then
+        nBx = nBx + 1
+        bxL(nBx) = shp.Left: bxT(nBx) = shp.Top: bxR(nBx) = shp.Left + shp.Width: bxB(nBx) = shp.Top + shp.Height
+    End If
+
+    ' order of spots: the chosen position first
+    Select Case lblPos
+        Case xlLabelPositionAbove: cand = Array(3, 0, 2, 1, 5, 4, 6, 7)
+        Case xlLabelPositionBelow: cand = Array(5, 4, 7, 1, 6, 0, 2, 3)
+        Case xlLabelPositionLeft:  cand = Array(6, 2, 7, 3, 5, 0, 1, 4)
+        Case LP_UPRIGHT:           cand = Array(0, 1, 2, 3, 4, 5, 6, 7)
+        Case Else:                 cand = Array(1, 0, 4, 2, 3, 5, 6, 7)   ' right
+    End Select
+
     For j = 1 To n
         If lblC(j) > 0 Then
+            ch.SeriesCollection(j).HasLeaderLines = False
             For i = 1 To ch.SeriesCollection(j).Points.Count
                 If ch.SeriesCollection(j).Points(i).HasDataLabel Then
-                    With ch.SeriesCollection(j).Points(i).DataLabel
-                        .Position = xlLabelPositionRight
-                        .Left = .Left - msz / 4
-                        .Top = .Top - .Height / 2 - msz / 4
-                    End With
+                    x = tws.Cells(blkRow(j) + i - 1, xC).Value: y = tws.Cells(blkRow(j) + i - 1, yC).Value
+                    If IsNum(x) And IsNum(y) Then
+                        If MapV(CDbl(x), xLo, xHi, xLog, pL, pW, False, ptx0) And _
+                           MapV(CDbl(y), yLo, yHi, yLog, pT, pH, True, pty0) Then
+                            Set dl = ch.SeriesCollection(j).Points(i).DataLabel
+                            w = dl.Width: h = dl.Height
+                            bestSc = -1
+                            For k = 0 To 7
+                                Select Case cand(k)
+                                    Case 0: cx = ptx0 + g: cy = pty0 - g - h            ' upper right
+                                    Case 1: cx = ptx0 + g: cy = pty0 - h / 2            ' right
+                                    Case 2: cx = ptx0 - g - w: cy = pty0 - g - h        ' upper left
+                                    Case 3: cx = ptx0 - w / 2: cy = pty0 - g - h        ' above
+                                    Case 4: cx = ptx0 + g: cy = pty0 + g                ' lower right
+                                    Case 5: cx = ptx0 - w / 2: cy = pty0 + g            ' below
+                                    Case 6: cx = ptx0 - g - w: cy = pty0 - h / 2        ' left
+                                    Case 7: cx = ptx0 - g - w: cy = pty0 + g            ' lower left
+                                End Select
+                                sc = 0
+                                ' outside the plot box
+                                If cx < pL Then sc = sc + (pL - cx) * h
+                                If cx + w > pL + pW Then sc = sc + (cx + w - pL - pW) * h
+                                If cy < pT Then sc = sc + (pT - cy) * w
+                                If cy + h > pT + pH Then sc = sc + (cy + h - pT - pH) * w
+                                ' legend, logo and labels already placed
+                                For m = 1 To nBx
+                                    ov = Overlap(cx, cy, cx + w, cy + h, bxL(m), bxT(m), bxR(m), bxB(m))
+                                    sc = sc + ov
+                                Next m
+                                ' markers
+                                For m = 1 To nP
+                                    sc = sc + Overlap(cx, cy, cx + w, cy + h, ptX(m) - msz / 2, ptY(m) - msz / 2, _
+                                                      ptX(m) + msz / 2, ptY(m) + msz / 2)
+                                Next m
+                                ' connecting lines (sampled)
+                                If useLine Then
+                                    For m = 1 To nP - 1
+                                        If ptS(m) = ptS(m + 1) Then
+                                            For ov = 0 To 1 Step 0.1
+                                                qx = ptX(m) + (ptX(m + 1) - ptX(m)) * ov
+                                                qy = ptY(m) + (ptY(m + 1) - ptY(m)) * ov
+                                                If qx > cx And qx < cx + w And qy > cy And qy < cy + h Then sc = sc + 20
+                                            Next ov
+                                        End If
+                                    Next m
+                                End If
+                                If bestSc < 0 Or sc < bestSc Then bestSc = sc: bestX = cx: bestY = cy
+                                If sc = 0 Then Exit For
+                            Next k
+                            dl.Left = bestX: dl.Top = bestY
+                            nBx = nBx + 1
+                            If nBx > UBound(bxL) Then
+                                ReDim Preserve bxL(1 To nBx): ReDim Preserve bxT(1 To nBx)
+                                ReDim Preserve bxR(1 To nBx): ReDim Preserve bxB(1 To nBx)
+                            End If
+                            bxL(nBx) = bestX: bxT(nBx) = bestY: bxR(nBx) = bestX + w: bxB(nBx) = bestY + h
+                        End If
+                    End If
                 End If
             Next i
         End If
     Next j
 End Sub
+
+' Area (pt^2) shared by two boxes given as left, top, right, bottom.
+Private Function Overlap(ByVal aL As Double, ByVal aT As Double, ByVal aR As Double, ByVal aB As Double, _
+                         ByVal bL As Double, ByVal bT As Double, ByVal bR As Double, ByVal bB As Double) As Double
+    Dim w As Double, h As Double
+    w = Application.Min(aR, bR) - Application.Max(aL, bL)
+    h = Application.Min(aB, bB) - Application.Max(aT, bT)
+    If w > 0 And h > 0 Then Overlap = w * h
+End Function
 
 ' Logo position from Buttons!M7: auto (also blank / anything else), upper
 ' left, upper right, lower left, lower right or above.
