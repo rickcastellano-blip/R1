@@ -30,8 +30,9 @@ Private Const LINE_CELL      As String = "F7"     ' 1 = connecting lines, 0 = ma
 Private Const SCHEME_CELL    As String = "G7"     ' standard / stoplight / green->red
 Private Const MARKER_CELL    As String = "H7"     ' marker size in pt (2-72); blank = default
 Private Const LINEW_CELL     As String = "I7"     ' line + marker outline width in pt; blank = default
-Private Const LBLPOS_CELL    As String = "J7"     ' point labels: right, above, below, left, in or upper right
+Private Const LBLPOS_CELL    As String = "J7"     ' point labels: right, above, below, left, in, upper right or auto
 Private Const LP_UPRIGHT     As Long = 9001       ' "upper right": not an Excel position; Right, then moved up
+Private Const LP_AUTO        As Long = 9002       ' "auto": each label where it collides least
 Private Const LBLFS_CELL     As String = "K7"     ' point-label font size in pt; blank = LABEL_FS
 Private Const LOGOPOS_CELL   As String = "M7"     ' logo: auto, upper left/right, lower left/right, above
 Private Const LOGO_DIR       As String = _
@@ -536,8 +537,9 @@ Private Sub BuildLineGraph(src As Range, tws As Worksheet, scope As Range, ur As
     co.Width = W + Px(legExtraW): co.Height = H + Px(legExtraH)   ' wider/taller only for an outside legend
     AnchorLegend ch, legCorner, W, H, topShift   ' last, once nothing else will move
     If Not logoShp Is Nothing Then AnchorLogo ch, logoShp, logoCorner, H
-    If DO_LABELS And lblPos <> xlLabelPositionCenter Then _
-        ArrangeLabels ch, tws, nBlk, blkRow, rc, xC, yC, lblC, lblPos, msz, useLine, xLog, yLog
+    If DO_LABELS And lblPos = LP_UPRIGHT Then RaiseLabels ch, nBlk, lblC, msz
+    If DO_LABELS And lblPos = LP_AUTO Then _
+        ArrangeLabels ch, tws, nBlk, blkRow, rc, xC, yC, lblC, msz, useLine, xLog, yLog
     ch.Refresh                               ' draw the final layout now
     SaveFigure co                            ' PNG copy in FIG_DIR
 End Sub
@@ -588,7 +590,7 @@ Private Sub AddPointLabels(ser As Series, lblRng As Range, fs As Double, ByVal l
         .ShowSeriesName = False
         .ShowCategoryName = False
         .ShowLegendKey = False
-        If lblPos = LP_UPRIGHT Then .Position = xlLabelPositionRight Else .Position = lblPos
+        If lblPos = LP_UPRIGHT Or lblPos = LP_AUTO Then .Position = xlLabelPositionRight Else .Position = lblPos
         If lblPos = xlLabelPositionCenter Then .HorizontalAlignment = xlCenter
         .Font.Name = FONT_NAME
         .Font.Size = fs
@@ -773,6 +775,7 @@ Private Sub ReadSettings(ByRef useLine As Boolean, ByRef scheme As String, ByRef
         Case "left":  lblPos = xlLabelPositionLeft
         Case "in":    lblPos = xlLabelPositionCenter
         Case "upper right": lblPos = LP_UPRIGHT
+        Case "auto":  lblPos = LP_AUTO
     End Select
 
     v = ws.Range(LBLFS_CELL).Value
@@ -1388,16 +1391,39 @@ Private Sub NiceRange(ByVal lo As Double, ByVal hi As Double, ByRef axMin As Dou
     axMin = Round(a, 12): axMax = Round(b, 12): axStep = Round(s, 12)
 End Sub
 
-' Places every point label where it collides least: each label tries the
-' chosen position first, then upper right, right, upper left, above, lower
-' right, below, left and lower left of its point, and takes the first spot
+' "upper right" point labels: Excel has no such position, so each label is
+' drawn to the right of its point and then moved up until its bottom sits
+' just above the point (its lower-left corner off the marker's upper right).
+Private Sub RaiseLabels(ch As Chart, ByVal n As Long, lblC() As Long, ByVal msz As Double)
+    Dim j As Long, i As Long
+    On Error Resume Next
+    ch.Refresh
+    DoEvents
+    For j = 1 To n
+        If lblC(j) > 0 Then
+            For i = 1 To ch.SeriesCollection(j).Points.Count
+                If ch.SeriesCollection(j).Points(i).HasDataLabel Then
+                    With ch.SeriesCollection(j).Points(i).DataLabel
+                        .Position = xlLabelPositionRight
+                        .Left = .Left - msz / 4
+                        .Top = .Top - .Height / 2 - msz / 4
+                    End With
+                End If
+            Next i
+        End If
+    Next j
+End Sub
+
+' J7 = auto: places every point label where it collides least: each label
+' tries upper right, right, upper left, above, lower right, below, left and
+' lower left of its point, in that order, and takes the first spot
 ' that touches no other label, marker, connecting line, legend, logo or plot
 ' edge (or, failing that, the spot that touches least). Labels are placed one
 ' after another, each avoiding those already placed. Leader lines are turned
 ' off, as every label now sits right next to its point.
 Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow() As Long, _
                           rc() As Long, ByVal xC As Long, ByVal yC As Long, lblC() As Long, _
-                          ByVal lblPos As Long, ByVal msz As Double, ByVal useLine As Boolean, _
+                          ByVal msz As Double, ByVal useLine As Boolean, _
                           ByVal xLog As Boolean, ByVal yLog As Boolean)
     Dim pL As Double, pT As Double, pW As Double, pH As Double
     Dim xLo As Double, xHi As Double, yLo As Double, yHi As Double
@@ -1448,14 +1474,7 @@ Private Sub ArrangeLabels(ch As Chart, tws As Worksheet, ByVal n As Long, blkRow
         bxL(nBx) = shp.Left: bxT(nBx) = shp.Top: bxR(nBx) = shp.Left + shp.Width: bxB(nBx) = shp.Top + shp.Height
     End If
 
-    ' order of spots: the chosen position first
-    Select Case lblPos
-        Case xlLabelPositionAbove: cand = Array(3, 0, 2, 1, 5, 4, 6, 7)
-        Case xlLabelPositionBelow: cand = Array(5, 4, 7, 1, 6, 0, 2, 3)
-        Case xlLabelPositionLeft:  cand = Array(6, 2, 7, 3, 5, 0, 1, 4)
-        Case LP_UPRIGHT:           cand = Array(0, 1, 2, 3, 4, 5, 6, 7)
-        Case Else:                 cand = Array(1, 0, 4, 2, 3, 5, 6, 7)   ' right
-    End Select
+    cand = Array(0, 1, 2, 3, 4, 5, 6, 7)          ' order of spots tried
 
     For j = 1 To n
         If lblC(j) > 0 Then
