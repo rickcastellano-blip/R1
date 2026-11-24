@@ -37,7 +37,8 @@ Private Const LBLFS_CELL     As String = "K7"     ' point-label font size in pt;
 Private Const LOGOPOS_CELL   As String = "M7"     ' logo: auto, upper left/right, lower left/right, above
 Private Const LOGO_DIR       As String = _
     "C:\Users\rcastellano\OneDrive - Chasm Advanced Materials\Performance Additives Team\Logos\External"
-Private Const LOGO_W         As Double = 108      ' logo width (pt); height keeps the picture's shape
+Private Const LOGO_W        As Double = 90       ' default logo width (pt, 1.25 in); height keeps the picture's shape
+Private Const LOGOW_CELL    As String = "N7"   ' logo width in inches; blank = LOGO_W
 Private Const LG_GAP_ABOVE   As Double = 6        ' gap between a logo above the plot and the plot (pt)
 ' =========================================================
 Sub GenerateLineGraph()
@@ -1579,10 +1580,25 @@ Private Function ReadLogoPos() As String
     End Select
 End Function
 
+' Logo width from Buttons!N7 in inches (0.25-10); blank or not a number
+' gives LOGO_W.
+Private Function ReadLogoWidth() As Double
+    Dim ws As Worksheet, v As Variant
+    ReadLogoWidth = LOGO_W
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SETTINGS_SHEET)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    v = ws.Range(LOGOW_CELL).Value
+    If IsNum(v) Then
+        If CDbl(v) > 0 Then ReadLogoWidth = Application.Min(720, Application.Max(18, CDbl(v) * 72))
+    End If
+End Function
+
 ' The logo picture LOGO_DIR\<name>.png / .jpg / .jpeg / .gif / .bmp, put in the
-' chart LOGO_W wide (its own proportions). Nothing if no such file.
+' chart as wide as Buttons!N7 says (LOGO_W if blank), in its own proportions. Nothing if no such file.
 Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
-    Dim ext As Variant, f As String, img As Object, asp As Double
+    Dim ext As Variant, f As String, img As Object, asp As Double, lw As Double
     For Each ext In Array(".png", ".jpg", ".jpeg", ".gif", ".bmp")
         If Len(Dir(LOGO_DIR & "\" & nm & ext)) > 0 Then f = LOGO_DIR & "\" & nm & ext: Exit For
     Next ext
@@ -1605,8 +1621,9 @@ Private Function AddLogo(ch As Chart, ByVal nm As String) As Shape
     If asp <= 0 And AddLogo.Width > 0 Then asp = AddLogo.Height / AddLogo.Width
     If asp <= 0 Then asp = 0.6
     AddLogo.LockAspectRatio = msoFalse
-    AddLogo.Width = LOGO_W
-    AddLogo.Height = LOGO_W * asp
+    lw = ReadLogoWidth()
+    AddLogo.Width = lw
+    AddLogo.Height = lw * asp
     AddLogo.LockAspectRatio = msoTrue
     AddLogo.Name = "Logo"
 End Function

@@ -64,6 +64,7 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
   | J7 | Label Position: right (default), above, below, left, in (centred on the point), upper right, or auto (each label placed where it overlaps least: other labels, markers, lines, legend, logo) |
   | K7 | Label font size: points (4–72); blank = 10 |
   | M7 | Logo position: auto (default), upper left, upper right, lower left, lower right, above |
+  | N7 | Logo width in inches; blank = 1.25 |
   | L7 | Width: figure width in inches (1–20); blank = 5. Only the plot widens: height, text, lines and the left/right margins stay fixed |
 
 - The legend goes in a corner where it covers no data (1 or 2 columns, raising the axes a
@@ -72,7 +73,8 @@ Select a block containing one or more `graph` tags (also `graph linlog`, `graph 
 - Both graphs: no fill behind the figure, white behind the axes.
 - Logos (both graphs): a `logo` tag in the graph tag's column, below the tag (before the next
   graph tag), with the logo's name in the cell to its left, e.g. `CHASM | logo`. The picture
-  `<name>.png/.jpg` comes from the fixed `LOGO_DIR` (Logos\External), 1.5 in wide. Position:
+  `<name>.png/.jpg` comes from the fixed `LOGO_DIR` (Logos\External), as wide as Buttons!N3 (bar) / N7 (line) in
+  inches (blank = 1.25 in). Position:
   Buttons!M3 (bar) / M7 (line): `auto` takes the clearest inside corner (upper left first),
   a named corner is used as given, `above` puts it over the plot; the legend never shares its
   corner and the axis is raised (within 2x) so data stays clear of it.
